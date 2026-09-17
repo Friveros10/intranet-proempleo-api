@@ -1,0 +1,57 @@
+/** Tabla dbo.BENEFICIARIOS (legacy SICAP) */
+export interface Beneficiario {
+  rut_ben: number;
+  dig_ben: string | null;
+  nom_ben: string | null;
+  pat_ben: string | null;
+  mat_ben: string | null;
+  dir_ben: string | null;
+  reg_ben: number | null;
+  ciu_ben: number | null;
+  com_ben: number | null;
+  civ_ben: number | null;
+  nac_ben: number | null;
+  fecnac_ben: Date | null;
+  tra_ben: string | null;
+  car_ben: string | null;
+  sex_ben: string | null;
+  jefhog_ben: string | null;
+  nivedu_ben: number | null;
+  usu_cre: string | null;
+  fec_cre: Date | null;
+  usu_mod: string | null;
+  fec_mod: Date | null;
+  usu_eli: string | null;
+  fec_eli: Date | null;
+  est_ben: string | null;
+  etn_ben: number | null;
+  idchs_ben: string | null;
+  dis_ben: string | null;
+  aredes_ben: string | null;
+  pan_ben: string | null;
+  con_ben: string | null;
+  peninh_ben: string | null;
+  cerdes_ben: string | null;
+  eda_ben: number | null;
+  chs_ben: string | null;
+  idcerdes_ben: string | null;
+  cod_RC: string | null;
+  fec_RC: Date | null;
+  usu_apr: string | null;
+  fec_apr: Date | null;
+  usu_imp: string | null;
+  fec_imp: Date | null;
+  key_imp: string | null;
+  fm_ben: string | null;
+  fs_ben: string | null;
+  tel_ben: string | null;
+  ano_ben: number | null;
+  corr_mar: number | null;
+  cod_cel_ben: string | null;
+  cel_ben: string | null;
+  cod_tel_ben: string | null;
+  tip_mar: string | null;
+  telrec_ben: string | null;
+  codtelrec_ben: string | null;
+}
+
