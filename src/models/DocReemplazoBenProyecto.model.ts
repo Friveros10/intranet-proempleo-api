@@ -15,6 +15,7 @@ export class DocReemplazoBenProyectoModel
   declare nombreArchivo: string;
   declare archivoUrl: string;
   declare status: DocumentoStatus;
+  declare comentarioRechazo: string | null;
   declare fechaCarga: string;
 }
 
@@ -32,6 +33,7 @@ DocReemplazoBenProyectoModel.init(
       defaultValue: 'pendiente',
       validate: { isIn: [['pendiente', 'aprobado', 'rechazado']] },
     },
+    comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaCarga: { type: DataTypes.DATE, allowNull: false },
   },
   { sequelize, tableName: 'Doc_reemplazo_benpro', schema: 'dbo', timestamps: false }

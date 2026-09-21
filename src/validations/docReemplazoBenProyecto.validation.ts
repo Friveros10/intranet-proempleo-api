@@ -11,6 +11,11 @@ export const crearDocReemplazoSchema = z.object({
 export const actualizarEstadoDocReemplazoSchema = z.object({
   body: z.object({
     status: z.enum(['aprobado', 'rechazado'], { required_error: 'status es requerido' }),
+    comentarioRechazo: z.string().trim().max(1000, 'El comentario no puede superar 1000 caracteres').optional(),
+  }).superRefine((data, ctx) => {
+    if (data.status === 'rechazado' && !data.comentarioRechazo) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['comentarioRechazo'], message: 'El comentario es requerido al rechazar un documento' });
+    }
   }),
 });
 

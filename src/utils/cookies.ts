@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { env } from '../config/env';
 
-const ACCESS_TOKEN_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutos
+const ACCESS_TOKEN_MAX_AGE_MS = 30 * 60 * 1000; // 15 minutos
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
 
 export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {

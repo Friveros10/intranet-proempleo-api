@@ -1,0 +1,9 @@
+const path = require('path');
+
+require('ts-node/register/transpile-only');
+
+module.exports = {
+  config: path.resolve('config', 'config.js'),
+  'migrations-path': path.resolve('migrations'),
+  'seeders-path': path.resolve('seeders'),
+};

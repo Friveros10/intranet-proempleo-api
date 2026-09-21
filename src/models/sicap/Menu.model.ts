@@ -21,7 +21,7 @@ export class MenuModel extends Model<Menu, MenuCreation> implements Menu {
 
 MenuModel.init(
   {
-    corr_men: { type: DataTypes.INTEGER, primaryKey: true },
+    corr_men: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     cod_men: DataTypes.STRING,
     Nom_men: DataTypes.STRING,
     Tip_men: DataTypes.STRING,

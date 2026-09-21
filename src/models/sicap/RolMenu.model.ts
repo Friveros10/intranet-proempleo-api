@@ -13,7 +13,7 @@ export class RolMenuModel extends Model<RolMenu, RolMenuCreation> implements Rol
 
 RolMenuModel.init(
   {
-    corr_RolMen: { type: DataTypes.INTEGER, primaryKey: true },
+    corr_RolMen: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     corr_rol: DataTypes.INTEGER,
     corr_men: DataTypes.INTEGER,
     acc_RolMen: DataTypes.STRING,

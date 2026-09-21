@@ -43,11 +43,20 @@ export const docReemplazoBenProyectoService = {
     return docReemplazoBenProyectoRepository.create({ ...data, ...archivo });
   },
 
-  async actualizarEstado(id: number, status: DocumentoStatus) {
-    const actualizado = await docReemplazoBenProyectoRepository.actualizarEstado(id, status);
+  async actualizarEstado(id: number, status: DocumentoStatus, comentarioRechazo: string | null) {
+    const actualizado = await docReemplazoBenProyectoRepository.actualizarEstado(id, status, comentarioRechazo);
     if (!actualizado) {
       throw new AppError('Documento no encontrado', 404);
     }
     return actualizado;
+  },
+
+  async reemplazarArchivo(id: number, nombreArchivo: string, archivoUrl: string) {
+    const documento = await docReemplazoBenProyectoRepository.findById(id);
+    if (!documento) throw new AppError('Documento no encontrado', 404);
+    if (documento.status !== 'rechazado') {
+      throw new AppError('Solo se puede volver a subir un documento rechazado', 400);
+    }
+    return docReemplazoBenProyectoRepository.reemplazarArchivo(id, nombreArchivo, archivoUrl);
   },
 };

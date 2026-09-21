@@ -5,6 +5,7 @@ export const DOCUMENTOS_REEMPLAZO = [
   { id: 3, nombre: 'Certificado OMIL' },
   { id: 4, nombre: 'Registro social de hogares' },
   { id: 5, nombre: 'Declaración jurada simple' },
+  { id: 6, nombre: 'Certificado de inscripción BNE' }
 ] as const;
 
 export type DocumentoReemplazoId = (typeof DOCUMENTOS_REEMPLAZO)[number]['id'];

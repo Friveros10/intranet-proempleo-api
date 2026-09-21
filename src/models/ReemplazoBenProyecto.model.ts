@@ -1,6 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 import { ReemplazoBenProyecto, ReemplazoStatus } from './ReemplazoBenProyecto';
+import { ProyectoModel } from './sicap/Proyecto.model';
 
 type ReemplazoCreation = Optional<ReemplazoBenProyecto, 'id' | 'fechaAprobacionReemplazo'>;
 
@@ -16,6 +17,8 @@ export class ReemplazoBenProyectoModel
   declare status: ReemplazoStatus;
   declare fechaSolicitudReemplazo: string;
   declare fechaAprobacionReemplazo: string | null;
+  // Asociación cargada solo cuando se hace include: [{ model: ProyectoModel, as: 'proyecto' }]
+  declare proyecto?: ProyectoModel;
 }
 
 ReemplazoBenProyectoModel.init(

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { docReemplazoBenProyectoService } from '../services/docReemplazoBenProyecto.service';
 import { DOCUMENTOS_REEMPLAZO } from '../constants/documentosReemplazo';
 import { AppError } from '../utils/AppError';
+import { guardarDocumentoEnDisco, eliminarDocumentoEnDisco } from '../middlewares/upload.middleware';
 
 export const docReemplazoBenProyectoController = {
   async listarCatalogo(_req: Request, res: Response): Promise<void> {
@@ -36,7 +37,24 @@ export const docReemplazoBenProyectoController = {
   },
 
   async actualizarEstado(req: Request, res: Response): Promise<void> {
-    const doc = await docReemplazoBenProyectoService.actualizarEstado(Number(req.params.id), req.body.status);
+    const doc = await docReemplazoBenProyectoService.actualizarEstado(
+      Number(req.params.id),
+      req.body.status,
+      req.body.comentarioRechazo ?? null,
+    );
     res.status(200).json(doc);
+  },
+
+  async reemplazarArchivo(req: Request, res: Response): Promise<void> {
+    if (!req.file) throw new AppError('El archivo PDF es requerido', 400);
+    const archivoUrl = guardarDocumentoEnDisco(Number(req.params.id), req.file);
+    const actualizado = await docReemplazoBenProyectoService.reemplazarArchivo(
+      Number(req.params.id),
+      req.file.originalname,
+      archivoUrl,
+    );
+    if (!actualizado) throw new AppError('Documento no encontrado', 404);
+    eliminarDocumentoEnDisco(actualizado.archivoUrlAnterior);
+    res.status(200).json(actualizado.doc);
   },
 };

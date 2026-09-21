@@ -7,7 +7,10 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:migrate": "sequelize-cli db:migrate",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo",
+    "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {
@@ -38,6 +41,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^20.14.12",
     "pino-pretty": "^11.2.2",
+    "sequelize-cli": "^6.6.5",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.4"
   }

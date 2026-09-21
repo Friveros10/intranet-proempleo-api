@@ -40,5 +40,16 @@ export const actualizarEstadoReemplazoSchema = z.object({
   }),
 });
 
+export const listarReemplazoSchema = z.object({
+  query: z.object({
+    region: z.coerce.number().int().optional(),
+    fechaDesde: z.string().min(1).optional(),
+    fechaHasta: z.string().min(1).optional(),
+    status: z.enum(['pendiente', 'aprobado', 'rechazado']).optional(),
+  }),
+});
+
+export type ListarReemplazoQuery = z.infer<typeof listarReemplazoSchema>['query'];
+
 export type CrearReemplazoInput = z.infer<typeof crearReemplazoSchema>['body'];
 export type ActualizarEstadoReemplazoInput = z.infer<typeof actualizarEstadoReemplazoSchema>['body'];

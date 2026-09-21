@@ -8,5 +8,6 @@ export interface DocReemplazoBenProyecto {
   nombreArchivo: string;
   archivoUrl: string;
   status: DocumentoStatus;
+  comentarioRechazo: string | null;
   fechaCarga: string;
 }

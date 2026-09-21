@@ -1,3 +1,4 @@
+import { Op, WhereOptions } from 'sequelize';
 import { ReemplazoBenProyectoModel } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 import { BeneficiarioModel } from '../models/sicap/Beneficiario.model';
@@ -5,13 +6,39 @@ import { ProyectoModel } from '../models/sicap/Proyecto.model';
 import { UsuarioSicapModel } from '../models/sicap/UsuarioSicap.model';
 import { ReemplazoStatus } from '../models/ReemplazoBenProyecto';
 
+export interface ReemplazoFiltros {
+  region?: number;
+  fechaDesde?: string;
+  fechaHasta?: string;
+  status?: ReemplazoStatus;
+}
+
 export const reemplazoBenProyectoRepository = {
-  async findAll(): Promise<ReemplazoBenProyectoModel[]> {
+  async findAll(filtros: ReemplazoFiltros = {}): Promise<ReemplazoBenProyectoModel[]> {
+    const where: WhereOptions = {};
+
+    if (filtros.status) {
+      where.status = filtros.status;
+    }
+
+    if (filtros.fechaDesde || filtros.fechaHasta) {
+      where.fechaSolicitudReemplazo = {
+        ...(filtros.fechaDesde ? { [Op.gte]: filtros.fechaDesde } : {}),
+        ...(filtros.fechaHasta ? { [Op.lte]: filtros.fechaHasta } : {}),
+      };
+    }
+
     return ReemplazoBenProyectoModel.findAll({
+      where,
       include: [
         { model: BeneficiarioModel, as: 'beneficiarioActual' },
         { model: BeneficiarioModel, as: 'beneficiarioNuevo' },
-        { model: ProyectoModel, as: 'proyecto' },
+        {
+          model: ProyectoModel,
+          as: 'proyecto',
+          where: filtros.region ? { reg_pro: filtros.region } : undefined,
+          required: Boolean(filtros.region),
+        },
         { model: UsuarioSicapModel, as: 'usuarioSolicitante' },
       ],
       order: [['id', 'DESC']]

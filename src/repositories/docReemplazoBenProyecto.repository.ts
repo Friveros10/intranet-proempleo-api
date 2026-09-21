@@ -31,11 +31,24 @@ export const docReemplazoBenProyectoRepository = {
     });
   },
 
-  async actualizarEstado(id: number, status: DocumentoStatus): Promise<DocReemplazoBenProyectoModel | null> {
+  async actualizarEstado(id: number, status: DocumentoStatus, comentarioRechazo: string | null): Promise<DocReemplazoBenProyectoModel | null> {
     const doc = await DocReemplazoBenProyectoModel.findByPk(id);
     if (!doc) return null;
     doc.status = status;
+    doc.comentarioRechazo = comentarioRechazo;
     await doc.save();
     return doc;
+  },
+
+  async reemplazarArchivo(id: number, nombreArchivo: string, archivoUrl: string): Promise<{ doc: DocReemplazoBenProyectoModel; archivoUrlAnterior: string } | null> {
+    const doc = await DocReemplazoBenProyectoModel.findByPk(id);
+    if (!doc) return null;
+    const archivoUrlAnterior = doc.archivoUrl;
+    doc.nombreArchivo = nombreArchivo;
+    doc.archivoUrl = archivoUrl;
+    doc.status = 'pendiente';
+    doc.comentarioRechazo = null;
+    await doc.save();
+    return { doc, archivoUrlAnterior };
   },
 };

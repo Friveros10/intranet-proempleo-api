@@ -50,3 +50,10 @@ export function guardarDocumentoEnDisco(idReemplazo: number, file: Express.Multe
   fs.writeFileSync(path.join(carpetaReemplazo, nombreUnico), file.buffer);
   return `/uploads/reemplazos/${idReemplazo}/${nombreUnico}`;
 }
+
+export function eliminarDocumentoEnDisco(archivoUrl: string): void {
+  if (!archivoUrl.startsWith('/uploads/reemplazos/')) return;
+  const archivo = path.resolve(process.cwd(), archivoUrl.replace(/^\//, ''));
+  if (!archivo.startsWith(UPLOADS_ROOT)) return;
+  if (fs.existsSync(archivo)) fs.unlinkSync(archivo);
+}

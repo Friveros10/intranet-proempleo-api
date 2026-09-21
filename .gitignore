@@ -7,3 +7,4 @@ coverage/
 uploads/
 *.md
 cookies.txt
+.env.example
