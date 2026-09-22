@@ -1,8 +1,8 @@
 // services/rsh.service.ts
 
-import jwt from 'jsonwebtoken';
-import axios from 'axios';
-import { formatearRut } from '../utils/wsFunctions';
+import jwt from "jsonwebtoken";
+import axios from "axios";
+import { formatearRut } from "../utils/wsFunctions";
 
 export class RshService {
   private readonly secret = process.env.RSH_SECRET!;
@@ -11,13 +11,13 @@ export class RshService {
   private generateToken(): string {
     return jwt.sign(
       {
-        iss: 'restrshInstituciones-QA'
+        iss: "restrshInstituciones-QA",
       },
       this.secret,
       {
-        algorithm: 'HS256',
-        expiresIn: 1200
-      }
+        algorithm: "HS256",
+        expiresIn: 1200,
+      },
     );
   }
 
@@ -26,17 +26,17 @@ export class RshService {
     const { cuerpo: rut, dv } = formatearRut(rutFormateado);
 
     const { data } = await axios.post(
-      'https://api.ministeriodesarrollosocial.gob.cl/qa/restRSHInstitucionesQA',
+      "https://api.ministeriodesarrollosocial.gob.cl/qa/restRSHInstitucionesQA",
       {
-        "run": rut,
-        "dv": dv,
-        "clave": this.key
+        run: rut,
+        dv: dv,
+        clave: this.key,
       },
       {
         headers: {
-          Authorization: `Bearer ${token}`
-        }
-      }
+          Authorization: `Bearer ${token}`,
+        },
+      },
     );
 
     return data;

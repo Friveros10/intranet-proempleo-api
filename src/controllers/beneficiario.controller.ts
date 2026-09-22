@@ -1,5 +1,5 @@
-import { Request, Response } from 'express';
-import { beneficiarioService } from '../services/beneficiario.service';
+import { Request, Response } from "express";
+import { beneficiarioService } from "../services/beneficiario.service";
 
 export const beneficiarioController = {
   async ficha(req: Request, res: Response): Promise<void> {
@@ -8,7 +8,14 @@ export const beneficiarioController = {
   },
 
   async activo(req: Request, res: Response): Promise<void> {
-    const data = await beneficiarioService.buscarActivoPorRut(req.params.rut);
+    const data = await beneficiarioService.buscarActivoPorRut(
+      req.params.rut,
+      Number(req.user!.sub),
+    );
+    if (!data) {
+      res.status(404).json({ message: "Beneficiario activo no encontrado." });
+      return;
+    }
     res.status(200).json(data);
   },
 };
