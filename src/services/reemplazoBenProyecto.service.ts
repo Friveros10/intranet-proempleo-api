@@ -1,5 +1,7 @@
+import { Request } from 'express';
 import { reemplazoBenProyectoRepository, ReemplazoFiltros } from '../repositories/reemplazoBenProyecto.repository';
 import { docReemplazoBenProyectoRepository } from '../repositories/docReemplazoBenProyecto.repository';
+import { auditLogRepository } from '../repositories/auditLog.repository';
 import { beneficiarioRepository } from '../repositories/sicap/beneficiario.repository';
 import { proyectoRepository } from '../repositories/sicap/proyecto.repository';
 import { regionRepository } from '../repositories/sicap/region.repository';
@@ -62,7 +64,7 @@ export const reemplazoBenProyectoService = {
   },
 
   // Crea la solicitud, el beneficiario nuevo (si no existe) y los documentos, todo junto
-  async crear(data: CrearReemplazoInput, archivos: Express.Multer.File[], rutUsuarioSolicitante: number) {
+  async crear(data: CrearReemplazoInput, archivos: Express.Multer.File[], rutUsuarioSolicitante: number, req: Request) {
     const [beneficiarioActual, proyecto, contexto] = await Promise.all([
       beneficiarioRepository.findByRut(data.idBeneficiarioProyecto),
       proyectoRepository.findByFolio(data.idProyecto),
@@ -125,28 +127,63 @@ export const reemplazoBenProyectoService = {
       });
     }
 
+    await auditLogRepository.registrar({
+      usuarioId: rutUsuarioSolicitante,
+      accion: 'REEMPLAZO_CREADO',
+      modulo: 'REEMPLAZOS',
+      entidad: 'Reemplazo_benpro',
+      registroId: String(reemplazo.id),
+      region: proyecto.reg_pro ?? beneficiarioActual.reg_ben ?? null,
+      detalle: `Solicitud de reemplazo creada para proyecto ${data.idProyecto}`,
+      req,
+    });
+
     const reemplazoCompleto = await reemplazoBenProyectoRepository.findById(reemplazo.id);
     return reemplazoCompleto;
   },
 
-  async actualizarEstado(id: number, status: ReemplazoStatus, rutUsuario: number) {
+  async actualizarEstado(id: number, status: ReemplazoStatus, rutUsuario: number, req: Request) {
     const contexto = await obtenerContextoUsuario(rutUsuario);
     const permisoRequerido = status === 'aprobado' ? PERMISO_APROBAR : PERMISO_RECHAZAR;
     if (!contexto.permisos.includes(permisoRequerido)) {
       throw new AppError('No tiene permisos para realizar esta acción', 403);
     }
 
+    const reemplazoActual = await reemplazoBenProyectoRepository.findById(id);
     const actualizado = await reemplazoBenProyectoRepository.actualizarEstado(id, status);
     if (!actualizado) {
       throw new AppError('Reemplazo no encontrado', 404);
     }
+
+    await auditLogRepository.registrar({
+      usuarioId: rutUsuario,
+      accion: status === 'aprobado' ? 'REEMPLAZO_APROBADO' : 'REEMPLAZO_RECHAZADO',
+      modulo: 'REEMPLAZOS',
+      entidad: 'Reemplazo_benpro',
+      registroId: String(id),
+      region: reemplazoActual?.proyecto?.reg_pro ?? null,
+      detalle: `Solicitud de reemplazo ${status}`,
+      req,
+    });
     return actualizado;
   },
 
-  async eliminar(id: number) {
+  async eliminar(id: number, rutUsuario: number, req: Request) {
+    const reemplazoActual = await reemplazoBenProyectoRepository.findById(id);
     const eliminado = await reemplazoBenProyectoRepository.eliminar(id);
     if (!eliminado) {
       throw new AppError('Reemplazo no encontrado', 404);
     }
+
+    await auditLogRepository.registrar({
+      usuarioId: rutUsuario,
+      accion: 'REEMPLAZO_ELIMINADO',
+      modulo: 'REEMPLAZOS',
+      entidad: 'Reemplazo_benpro',
+      registroId: String(id),
+      region: reemplazoActual?.proyecto?.reg_pro ?? null,
+      detalle: 'Solicitud de reemplazo eliminada',
+      req,
+    });
   },
 };

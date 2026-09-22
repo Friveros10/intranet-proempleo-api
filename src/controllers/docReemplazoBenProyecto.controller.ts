@@ -32,7 +32,7 @@ export const docReemplazoBenProyectoController = {
       nombreArchivo: req.file.originalname,
       archivoUrl: `/uploads/reemplazos/${req.body.idReemplazoBenProyecto}/${req.file.filename}`,
     };
-    const doc = await docReemplazoBenProyectoService.crear(req.body, archivo);
+    const doc = await docReemplazoBenProyectoService.crear(req.body, archivo, Number(req.user!.sub), req);
     res.status(201).json(doc);
   },
 
@@ -41,6 +41,8 @@ export const docReemplazoBenProyectoController = {
       Number(req.params.id),
       req.body.status,
       req.body.comentarioRechazo ?? null,
+      Number(req.user!.sub),
+      req,
     );
     res.status(200).json(doc);
   },
@@ -52,6 +54,8 @@ export const docReemplazoBenProyectoController = {
       Number(req.params.id),
       req.file.originalname,
       archivoUrl,
+      Number(req.user!.sub),
+      req,
     );
     if (!actualizado) throw new AppError('Documento no encontrado', 404);
     eliminarDocumentoEnDisco(actualizado.archivoUrlAnterior);

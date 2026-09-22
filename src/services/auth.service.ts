@@ -1,6 +1,5 @@
 import { Request } from 'express';
 import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repository';
-import { auditLogRepository } from '../repositories/auditLog.repository';
 import { compararPasswordLegacy } from '../utils/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError } from '../utils/AppError';
@@ -24,30 +23,15 @@ function rolesDe(usuario: UsuarioSicapModel): string[] {
 }
 
 export const authService = {
-  async login(identificador: string, password: string, req: Request): Promise<LoginResult> {
+  async login(identificador: string, password: string, _req: Request): Promise<LoginResult> {
     const usuario = await usuarioSicapRepository.findByLogin(identificador);
     if (!usuario) {
-      auditLogRepository.registrar({
-        usuarioId: null,
-        accion: 'LOGIN_FAILED',
-        entidad: 'usuarios',
-        detalle: `Usuario no encontrado: ${identificador}`,
-        req,
-      });
       throw new AppError('Credenciales inválidas', 401);
     }
 
     const rutUsu = usuario.rut_usu;
 
     if (loginAttemptsTracker.estaBloqueado(rutUsu)) {
-      auditLogRepository.registrar({
-        usuarioId: String(rutUsu),
-        accion: 'LOGIN_BLOCKED',
-        entidad: 'usuarios',
-        registroId: String(rutUsu),
-        detalle: 'Usuario bloqueado por intentos fallidos',
-        req,
-      });
       throw new AppError('Usuario bloqueado temporalmente por intentos fallidos', 423);
     }
 
@@ -59,14 +43,6 @@ export const authService = {
 
     if (!passwordValida) {
       loginAttemptsTracker.registrarFallo(rutUsu);
-      auditLogRepository.registrar({
-        usuarioId: String(rutUsu),
-        accion: 'LOGIN_FAILED',
-        entidad: 'usuarios',
-        registroId: String(rutUsu),
-        detalle: 'Contraseña incorrecta',
-        req,
-      });
       throw new AppError('Credenciales inválidas', 401);
     }
 
@@ -77,14 +53,6 @@ export const authService = {
 
     const accessToken = signAccessToken({ sub: String(rutUsu), username: usuario.log_usu ?? '', roles });
     const refreshToken = signRefreshToken({ sub: String(rutUsu) });
-
-    auditLogRepository.registrar({
-      usuarioId: String(rutUsu),
-      accion: 'LOGIN_SUCCESS',
-      entidad: 'usuarios',
-      registroId: String(rutUsu),
-      req,
-    });
 
     logger.info({ usuarioId: rutUsu }, 'Login exitoso');
 
@@ -97,28 +65,14 @@ export const authService = {
     };
   },
 
-  logout(usuarioId: string | null, req: Request): void {
-    auditLogRepository.registrar({
-      usuarioId,
-      accion: 'LOGOUT',
-      entidad: 'usuarios',
-      registroId: usuarioId,
-      req,
-    });
+  logout(_usuarioId: string | null, _req: Request): void {
   },
 
-  async refresh(refreshToken: string, req: Request): Promise<{ accessToken: string; refreshToken: string }> {
+  async refresh(refreshToken: string, _req: Request): Promise<{ accessToken: string; refreshToken: string }> {
     let payload;
     try {
       payload = verifyRefreshToken(refreshToken);
     } catch {
-      auditLogRepository.registrar({
-        usuarioId: null,
-        accion: 'TOKEN_REFRESH_FAILED',
-        entidad: 'usuarios',
-        detalle: 'Refresh token inválido o expirado',
-        req,
-      });
       throw new AppError('Sesión expirada, inicie sesión nuevamente', 401);
     }
 
@@ -130,14 +84,6 @@ export const authService = {
     const roles = rolesDe(usuario);
     const newAccessToken = signAccessToken({ sub: String(usuario.rut_usu), username: usuario.log_usu ?? '', roles });
     const newRefreshToken = signRefreshToken({ sub: String(usuario.rut_usu) });
-
-    auditLogRepository.registrar({
-      usuarioId: String(usuario.rut_usu),
-      accion: 'TOKEN_REFRESH',
-      entidad: 'usuarios',
-      registroId: String(usuario.rut_usu),
-      req,
-    });
 
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   },

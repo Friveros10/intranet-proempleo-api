@@ -34,7 +34,7 @@ export const reemplazoBenProyectoController = {
       throw new AppError('No autenticado', 401);
     }
     const archivos = (req.files as Express.Multer.File[]) ?? [];
-    const reemplazo = await reemplazoBenProyectoService.crear(req.body, archivos, Number(req.user.sub));
+    const reemplazo = await reemplazoBenProyectoService.crear(req.body, archivos, Number(req.user.sub), req);
     res.status(201).json(reemplazo);
   },
 
@@ -45,13 +45,17 @@ export const reemplazoBenProyectoController = {
     const reemplazo = await reemplazoBenProyectoService.actualizarEstado(
       Number(req.params.id),
       req.body.status,
-      Number(req.user.sub)
+      Number(req.user.sub),
+      req
     );
     res.status(200).json(reemplazo);
   },
 
   async eliminar(req: Request, res: Response): Promise<void> {
-    await reemplazoBenProyectoService.eliminar(Number(req.params.id));
+    if (!req.user) {
+      throw new AppError('No autenticado', 401);
+    }
+    await reemplazoBenProyectoService.eliminar(Number(req.params.id), Number(req.user.sub), req);
     res.status(204).send();
   },
 };
