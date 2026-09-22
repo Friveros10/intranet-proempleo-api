@@ -5,6 +5,7 @@ import { BeneficiarioModel } from '../models/sicap/Beneficiario.model';
 import { ProyectoModel } from '../models/sicap/Proyecto.model';
 import { UsuarioSicapModel } from '../models/sicap/UsuarioSicap.model';
 import { ReemplazoStatus } from '../models/ReemplazoBenProyecto';
+import dayjs from 'dayjs';
 
 export interface ReemplazoFiltros {
   region?: number;
@@ -21,10 +22,18 @@ export const reemplazoBenProyectoRepository = {
       where.status = filtros.status;
     }
 
+    
     if (filtros.fechaDesde || filtros.fechaHasta) {
+      const fechaDesde = filtros.fechaDesde
+        ? dayjs(filtros.fechaDesde).startOf('day').toDate()
+        : null;
+  
+      const fechaHasta = filtros.fechaHasta
+        ? dayjs(filtros.fechaHasta).endOf('day').toDate()
+        : null;
       where.fechaSolicitudReemplazo = {
-        ...(filtros.fechaDesde ? { [Op.gte]: filtros.fechaDesde } : {}),
-        ...(filtros.fechaHasta ? { [Op.lte]: filtros.fechaHasta } : {}),
+        ...(fechaDesde ? { [Op.gte]: fechaDesde } : {}),
+        ...(fechaHasta ? { [Op.lte]: fechaHasta } : {}),
       };
     }
 

@@ -15,6 +15,9 @@ export interface FichaBeneficiarioRow {
   com_ben: number | null;
   nombre_comuna: string | null;
   civ_ben: number | null;
+  ultimo_mes_benpro: number | null;
+  ultimo_ano_benpro: number | null;
+  folio_vigente: number;
 }
 
 export const beneficiarioRepository = {
@@ -60,12 +63,27 @@ export const beneficiarioRepository = {
           c.nom_ciu AS nombre_ciudad,
           b.com_ben,
           co.nom_com AS nombre_comuna,
-          b.civ_ben
-        FROM dbo.BENEFICIARIOS b
-        LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
-        LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
-        LEFT JOIN dbo.COMUNAS co ON b.com_ben = co.cod_com
-        WHERE b.rut_ben = :rut_ben`,
+          b.civ_ben,
+          bp.mes_benpro as ultimo_mes_benpro,
+          bp.ANO_benpro as ultimo_ano_benpro,
+          bp.folio_vigente as folio_vigente
+      FROM dbo.BENEFICIARIOS b
+      LEFT JOIN dbo.REGIONES r
+          ON b.reg_ben = r.cod_region
+      LEFT JOIN dbo.CIUDADES c
+          ON b.ciu_ben = c.cod_ciu
+      LEFT JOIN dbo.COMUNAS co
+          ON b.com_ben = co.cod_com
+      OUTER APPLY (
+          SELECT TOP 1
+              mes_benpro,
+              ANO_benpro,
+              fol_pro as folio_vigente
+          FROM dbo.BENPRO
+          WHERE rut_ben = b.rut_ben
+          ORDER BY ano_BenPro desc, mes_benpro DESC
+      ) bp
+      WHERE b.rut_ben = :rut_ben`,
       { replacements: { rut_ben }, type: QueryTypes.SELECT }
     );
     return rows[0] ?? null;

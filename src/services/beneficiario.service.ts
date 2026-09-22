@@ -1,5 +1,4 @@
 import { beneficiarioRepository, FichaBeneficiarioRow } from '../repositories/sicap/beneficiario.repository';
-import { benProRepository } from '../repositories/sicap/benPro.repository';
 import { proyectoRepository } from '../repositories/sicap/proyecto.repository';
 import { ProyectoModel } from '../models/sicap/Proyecto.model';
 import { AppError } from '../utils/AppError';
@@ -34,16 +33,7 @@ export const beneficiarioService = {
       throw new AppError('No se encontró un beneficiario con ese RUT', 404);
     }
 
-    const asignaciones = await benProRepository.findByBeneficiario(rut);
-    const asignacionVigente = asignaciones
-      .filter((a) => !a.fec_eli)
-      .sort((a, b) => (b.fec_cre?.getTime() ?? 0) - (a.fec_cre?.getTime() ?? 0))[0];
-
-    if (!asignacionVigente) {
-      throw new AppError('El beneficiario no tiene un proyecto vigente asignado', 404);
-    }
-
-    const proyecto = await proyectoRepository.findByFolio(asignacionVigente.fol_pro);
+    const proyecto = await proyectoRepository.findByFolio(ficha.folio_vigente);
     if (!proyecto) {
       throw new AppError('El proyecto asociado al beneficiario no existe', 404);
     }
