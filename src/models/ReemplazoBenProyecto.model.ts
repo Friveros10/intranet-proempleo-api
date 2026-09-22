@@ -1,7 +1,19 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
-import { ReemplazoBenProyecto, ReemplazoStatus } from './ReemplazoBenProyecto';
-import { ProyectoModel } from './sicap/Proyecto.model';
+import { ProyectoModel } from './Proyecto.model';
+
+export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado';
+
+export interface ReemplazoBenProyecto {
+  id: number;
+  idBeneficiarioProyecto: number;
+  idBeneficiarioNuevo: number;
+  idProyecto: number;
+  rutUsuarioSolicitante: number | null;
+  status: ReemplazoStatus;
+  fechaSolicitudReemplazo: string;
+  fechaAprobacionReemplazo: string | null;
+}
 
 type ReemplazoCreation = Optional<ReemplazoBenProyecto, 'id' | 'fechaAprobacionReemplazo'>;
 

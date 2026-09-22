@@ -1,6 +1,30 @@
 import { DataTypes, Model } from 'sequelize';
-import { sequelize } from '../../database/sequelize';
-import { BenPro } from './BenPro';
+import { sequelize } from '../database/sequelize';
+
+export interface BenPro {
+  ano_BenPro: number;
+  mes_benpro: number;
+  fol_pro: number;
+  rut_ben: number;
+  com_ben: number | null;
+  cor_benpro: number;
+  est_benpro: string | null;
+  usu_cre: string | null;
+  fec_cre: Date | null;
+  usu_eli: string | null;
+  fec_eli: Date | null;
+  key_imp: string | null;
+  usu_imp: string | null;
+  fec_imp: Date | null;
+  usu_apr: string | null;
+  fec_apr: Date | null;
+  sit_benpro: string | null;
+  sit_fec: Date | null;
+  sit_usu: string | null;
+  dir_benpro: string | null;
+  usu_mod: string | null;
+  fec_mod: Date | null;
+}
 
 export class BenProModel extends Model<BenPro, BenPro> implements BenPro {
   declare ano_BenPro: number;
@@ -27,7 +51,6 @@ export class BenProModel extends Model<BenPro, BenPro> implements BenPro {
   declare fec_mod: Date | null;
 }
 
-// BENPRO no tiene una PK simple: se modela con clave compuesta (ano_BenPro, mes_benpro, fol_pro, rut_ben, cor_benpro)
 BenProModel.init(
   {
     ano_BenPro: { type: DataTypes.INTEGER, primaryKey: true },

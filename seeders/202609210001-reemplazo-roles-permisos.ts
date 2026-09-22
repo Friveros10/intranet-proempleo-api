@@ -1,7 +1,7 @@
 import { sequelize } from '../src/database/sequelize';
-import { RolSicapModel } from '../src/models/sicap/RolSicap.model';
-import { MenuModel } from '../src/models/sicap/Menu.model';
-import { RolMenuModel } from '../src/models/sicap/RolMenu.model';
+import { RolSicapModel } from '../src/models/RolSicap.model';
+import { MenuModel } from '../src/models/Menu.model';
+import { RolMenuModel } from '../src/models/RolMenu.model';
 
 /**
  * Seeder del módulo de Reemplazo de Beneficiarios de Proyecto.
@@ -46,13 +46,13 @@ const MENUS_REEMPLAZO: MenuSeed[] = [
   { cod_men: 'REM_RECHAZ', Nom_men: 'Reemplazo: rechazar solicitud' },
   { cod_men: 'REM_DOCAPR', Nom_men: 'Reemplazo: aprobar documentos' },
   { cod_men: 'REM_DOCREC', Nom_men: 'Reemplazo: rechazar documentos' },
-  { cod_men: 'REM_FILTROREG', Nom_men: 'Reemplazo: filtro por región' },
+  { cod_men: 'REM_FILTR', Nom_men: 'Reemplazo: filtro por región' },
 ];
 
 // Asignación de permisos por rol (usando los cod_men definidos arriba)
 const PERMISOS_POR_ROL: Record<string, string[]> = {
-  ADMIN: ['REM_VERALL', 'REM_CREAR', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTROREG'],
-  MINISTERIO: ['REM_VERALL', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTROREG'],
+  ADMIN: ['REM_VERALL', 'REM_CREAR', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR'],
+  MINISTERIO: ['REM_VERALL', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR'],
   INTENDENCIA: ['REM_VERREG', 'REM_CREAR'],
 };
 

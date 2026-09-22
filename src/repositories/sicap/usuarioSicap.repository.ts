@@ -1,7 +1,7 @@
-import { UsuarioSicapModel } from '../../models/sicap/UsuarioSicap.model';
-import { RolSicapModel } from '../../models/sicap/RolSicap.model';
-import { RolMenuModel } from '../../models/sicap/RolMenu.model';
-import { MenuModel } from '../../models/sicap/Menu.model';
+import { UsuarioSicapModel } from '../../models/UsuarioSicap.model';
+import { RolSicapModel } from '../../models/RolSicap.model';
+import { RolMenuModel } from '../../models/RolMenu.model';
+import { MenuModel } from '../../models/Menu.model';
 
 export const usuarioSicapRepository = {
   async findAll(): Promise<UsuarioSicapModel[]> {

@@ -11,7 +11,7 @@ import { parseRut } from '../utils/rut';
 import { esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
 import { guardarDocumentoEnDisco } from '../middlewares/upload.middleware';
 import { CrearReemplazoInput } from '../validations/reemplazoBenProyecto.validation';
-import { ReemplazoStatus } from '../models/ReemplazoBenProyecto';
+import { ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
 
 const PERMISO_VER_TODAS_REGIONES = 'REM_VERALL';
 const PERMISO_APROBAR = 'REM_APROB';
@@ -103,7 +103,7 @@ export const reemplazoBenProyectoService = {
         nom_ben: data.nuevoBeneficiario.nombres,
         pat_ben: data.nuevoBeneficiario.apellidoPaterno,
         mat_ben: data.nuevoBeneficiario.apellidoMaterno,
-          dir_ben: data.nuevoBeneficiario.direccion,
+        dir_ben: data.nuevoBeneficiario.direccion ?? null,
         fecnac_ben: data.nuevoBeneficiario.fechaNacimiento,
       });
     }

@@ -1,6 +1,6 @@
 import { beneficiarioRepository, FichaBeneficiarioRow } from '../repositories/sicap/beneficiario.repository';
 import { proyectoRepository } from '../repositories/sicap/proyecto.repository';
-import { ProyectoModel } from '../models/sicap/Proyecto.model';
+import { ProyectoModel } from '../models/Proyecto.model';
 import { AppError } from '../utils/AppError';
 
 // Convierte un RUT formateado ("11.111.111-1" o "11111111-1") al cuerpo numérico, descartando el dígito verificador

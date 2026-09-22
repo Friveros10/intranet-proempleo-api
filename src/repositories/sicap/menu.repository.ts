@@ -1,4 +1,4 @@
-import { MenuModel } from '../../models/sicap/Menu.model';
+import { MenuModel } from '../../models/Menu.model';
 
 export const menuRepository = {
   async findAll(): Promise<MenuModel[]> {

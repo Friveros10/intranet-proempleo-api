@@ -1,6 +1,5 @@
-import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
-import { BeneficiarioModel } from '../models/sicap/Beneficiario.model';
-import { DocumentoStatus } from '../models/DocReemplazoBenProyecto';
+import { DocReemplazoBenProyectoModel, DocumentoStatus } from '../models/DocReemplazoBenProyecto.model';
+import { BeneficiarioModel } from '../models/Beneficiario.model';
 
 export const docReemplazoBenProyectoRepository = {
   async findAll(): Promise<DocReemplazoBenProyectoModel[]> {

@@ -5,7 +5,7 @@ const nuevoBeneficiarioSchema = z.object({
   nombres: z.string({ required_error: 'Los nombres son requeridos' }).min(1),
   apellidoPaterno: z.string({ required_error: 'El apellido paterno es requerido' }).min(1),
   apellidoMaterno: z.string({ required_error: 'El apellido materno es requerido' }).min(1),
-  direccion: z.string({ required_error: 'La dirección es requerida' }).min(1),
+  direccion: z.string().trim().min(1).nullable().optional(),
   fechaNacimiento: z.string({ required_error: 'La fecha de nacimiento es requerida' }).min(1),
 });
 

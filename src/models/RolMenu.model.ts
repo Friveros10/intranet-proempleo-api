@@ -1,6 +1,12 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from '../../database/sequelize';
-import { RolMenu } from './RolMenu';
+import { sequelize } from '../database/sequelize';
+
+export interface RolMenu {
+  corr_RolMen: number;
+  corr_rol: number | null;
+  corr_men: number | null;
+  acc_RolMen: string | null;
+}
 
 type RolMenuCreation = Optional<RolMenu, 'corr_RolMen'>;
 

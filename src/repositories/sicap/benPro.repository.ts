@@ -1,4 +1,4 @@
-import { BenProModel } from '../../models/sicap/BenPro.model';
+import { BenProModel } from '../../models/BenPro.model';
 
 export const benProRepository = {
   async findAll(): Promise<BenProModel[]> {

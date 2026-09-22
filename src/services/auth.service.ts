@@ -3,9 +3,8 @@ import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repos
 import { compararPasswordLegacy } from '../utils/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { AppError } from '../utils/AppError';
-import { toSafeUsuarioSicap, UsuarioSicapSafe } from '../models/sicap/UsuarioSicap';
-import { UsuarioSicapModel } from '../models/sicap/UsuarioSicap.model';
-import { RolSicapModel } from '../models/sicap/RolSicap.model';
+import { toSafeUsuarioSicap, UsuarioSicapModel, UsuarioSicapSafe } from '../models/UsuarioSicap.model';
+import { RolSicapModel } from '../models/RolSicap.model';
 import { loginAttemptsTracker } from '../utils/loginAttempts';
 import { logger } from '../utils/logger';
 

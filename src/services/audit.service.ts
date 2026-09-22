@@ -1,5 +1,5 @@
 import { auditLogRepository } from '../repositories/auditLog.repository';
-import { AuditLog, AuditPerfilNotificacion } from '../models/AuditLog';
+import { AuditLog, AuditPerfilNotificacion } from '../models/AuditLog.model';
 import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repository';
 import { AppError } from '../utils/AppError';
 

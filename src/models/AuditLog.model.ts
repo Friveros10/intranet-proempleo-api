@@ -1,6 +1,38 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
-import { AuditEstadoNotificacion, AuditLog } from './AuditLog';
+
+export type AuditAccion =
+  | 'REEMPLAZO_CREADO'
+  | 'REEMPLAZO_APROBADO'
+  | 'REEMPLAZO_RECHAZADO'
+  | 'REEMPLAZO_ELIMINADO'
+  | 'DOCUMENTO_CARGADO'
+  | 'DOCUMENTO_APROBADO'
+  | 'DOCUMENTO_RECHAZADO'
+  | 'DOCUMENTO_REEMPLAZADO';
+
+export type AuditEstadoNotificacion = 'pendiente' | 'vista';
+export type AuditPerfilNotificacion = 'ADMIN' | 'MINISTERIO' | 'INTENDENCIA';
+
+export interface AuditLog {
+  id: number;
+  usuarioId: number | null;
+  accion: AuditAccion;
+  modulo: string;
+  entidad: string;
+  registroId: string | null;
+  region: number | null;
+  fecha: string;
+  ip: string | null;
+  userAgent: string | null;
+  detalle?: string | null;
+  estadoAdmin: AuditEstadoNotificacion;
+  estadoMinisterio: AuditEstadoNotificacion;
+  estadoIntendencia: AuditEstadoNotificacion;
+  fechaVistaAdmin: string | null;
+  fechaVistaMinisterio: string | null;
+  fechaVistaIntendencia: string | null;
+}
 
 type AuditLogCreation = Optional<
   AuditLog,

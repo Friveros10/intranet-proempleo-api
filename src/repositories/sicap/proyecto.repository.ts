@@ -1,4 +1,4 @@
-import { ProyectoModel } from '../../models/sicap/Proyecto.model';
+import { ProyectoModel } from '../../models/Proyecto.model';
 
 export const proyectoRepository = {
   async findAll(): Promise<ProyectoModel[]> {

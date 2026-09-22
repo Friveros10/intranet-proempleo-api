@@ -1,6 +1,11 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from '../../database/sequelize';
-import { RolSicap } from './RolSicap';
+import { sequelize } from '../database/sequelize';
+
+export interface RolSicap {
+  corr_rol: number;
+  nom_rol: string | null;
+  est_rol: string | null;
+}
 
 type RolSicapCreation = Optional<RolSicap, 'corr_rol'>;
 

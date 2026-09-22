@@ -1,10 +1,10 @@
-import { BeneficiarioModel } from '../models/sicap/Beneficiario.model';
-import { ProyectoModel } from '../models/sicap/Proyecto.model';
-import { BenProModel } from '../models/sicap/BenPro.model';
-import { UsuarioSicapModel } from '../models/sicap/UsuarioSicap.model';
-import { RolSicapModel } from '../models/sicap/RolSicap.model';
-import { RolMenuModel } from '../models/sicap/RolMenu.model';
-import { MenuModel } from '../models/sicap/Menu.model';
+import { BeneficiarioModel } from '../models/Beneficiario.model';
+import { ProyectoModel } from '../models/Proyecto.model';
+import { BenProModel } from '../models/BenPro.model';
+import { UsuarioSicapModel } from '../models/UsuarioSicap.model';
+import { RolSicapModel } from '../models/RolSicap.model';
+import { RolMenuModel } from '../models/RolMenu.model';
+import { MenuModel } from '../models/Menu.model';
 import { ReemplazoBenProyectoModel } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 

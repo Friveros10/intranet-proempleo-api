@@ -1,7 +1,6 @@
 import { Request } from 'express';
 import { WhereOptions } from 'sequelize';
-import { AuditAccion, AuditPerfilNotificacion } from '../models/AuditLog';
-import { AuditLogModel } from '../models/AuditLog.model';
+import { AuditAccion, AuditLogModel, AuditPerfilNotificacion } from '../models/AuditLog.model';
 
 export interface RegistrarAuditoriaParams {
   usuarioId: string | number | null;

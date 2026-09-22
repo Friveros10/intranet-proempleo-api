@@ -1,10 +1,9 @@
 import { Op, WhereOptions } from 'sequelize';
-import { ReemplazoBenProyectoModel } from '../models/ReemplazoBenProyecto.model';
+import { ReemplazoBenProyectoModel, ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
-import { BeneficiarioModel } from '../models/sicap/Beneficiario.model';
-import { ProyectoModel } from '../models/sicap/Proyecto.model';
-import { UsuarioSicapModel } from '../models/sicap/UsuarioSicap.model';
-import { ReemplazoStatus } from '../models/ReemplazoBenProyecto';
+import { BeneficiarioModel } from '../models/Beneficiario.model';
+import { ProyectoModel } from '../models/Proyecto.model';
+import { UsuarioSicapModel } from '../models/UsuarioSicap.model';
 import dayjs from 'dayjs';
 
 export interface ReemplazoFiltros {

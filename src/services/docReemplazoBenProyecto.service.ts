@@ -6,7 +6,7 @@ import { beneficiarioRepository } from '../repositories/sicap/beneficiario.repos
 import { AppError } from '../utils/AppError';
 import { esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
 import { CrearDocReemplazoInput } from '../validations/docReemplazoBenProyecto.validation';
-import { DocumentoStatus } from '../models/DocReemplazoBenProyecto';
+import { DocumentoStatus } from '../models/DocReemplazoBenProyecto.model';
 
 export const docReemplazoBenProyectoService = {
   async listar() {

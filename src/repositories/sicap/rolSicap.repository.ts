@@ -1,4 +1,4 @@
-import { RolSicapModel } from '../../models/sicap/RolSicap.model';
+import { RolSicapModel } from '../../models/RolSicap.model';
 
 export const rolSicapRepository = {
   async findAll(): Promise<RolSicapModel[]> {

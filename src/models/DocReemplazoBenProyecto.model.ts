@@ -1,6 +1,19 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
-import { DocReemplazoBenProyecto, DocumentoStatus } from './DocReemplazoBenProyecto';
+
+export type DocumentoStatus = 'pendiente' | 'aprobado' | 'rechazado';
+
+export interface DocReemplazoBenProyecto {
+  id: number;
+  idReemplazoBenProyecto: number;
+  idDocumento: number;
+  idBeneficiario: number;
+  nombreArchivo: string;
+  archivoUrl: string;
+  status: DocumentoStatus;
+  comentarioRechazo: string | null;
+  fechaCarga: string;
+}
 
 type DocReemplazoCreation = Optional<DocReemplazoBenProyecto, 'id'>;
 

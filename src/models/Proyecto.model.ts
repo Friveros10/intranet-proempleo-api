@@ -1,6 +1,58 @@
 import { DataTypes, Model, Optional } from 'sequelize';
-import { sequelize } from '../../database/sequelize';
-import { Proyecto } from './Proyecto';
+import { sequelize } from '../database/sequelize';
+
+export interface Proyecto {
+  fol_pro: number;
+  nom_pro: string | null;
+  rutint_pro: string | null;
+  ruteje_pro: string | null;
+  reg_pro: number | null;
+  ciu_pro: number | null;
+  obj_pro: string | null;
+  imp_pro: number | null;
+  obs_pro: string | null;
+  mes_pro: number | null;
+  emp_pro: number | null;
+  fecini_pro: Date | null;
+  fecter_pro: Date | null;
+  rutres_pro: string | null;
+  fec_pro: Date | null;
+  carres_pro: string | null;
+  faxres_pro: string | null;
+  emares_pro: string | null;
+  subtitulo_mar: string | null;
+  item_mar: string | null;
+  linea_mar: string | null;
+  glo_detmar: string | null;
+  corr_mar: number | null;
+  corr_detmar: number | null;
+  usu_cre: string | null;
+  fec_cre: Date | null;
+  usu_mod: string | null;
+  fec_mod: Date | null;
+  usu_eli: string | null;
+  fec_eli: Date | null;
+  est_pro: string | null;
+  mon_pro: number | null;
+  jor_pro: number | null;
+  com_pro: number | null;
+  folext_pro: string | null;
+  ano_pro: number | null;
+  key_imp: string | null;
+  usu_imp: string | null;
+  fec_imp: Date | null;
+  usu_apr: string | null;
+  fec_apr: Date | null;
+  otroemp_pro: string | null;
+  usu_act: string | null;
+  fec_act: Date | null;
+  usu_rech: string | null;
+  fec_rech: Date | null;
+  EstApr_pro: string | null;
+  Dir_pro: string | null;
+  Latitud: number | null;
+  Longitud: number | null;
+}
 
 type ProyectoCreation = Optional<Proyecto, 'fol_pro'>;
 

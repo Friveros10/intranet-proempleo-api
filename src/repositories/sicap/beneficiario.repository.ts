@@ -1,5 +1,5 @@
 import { QueryTypes } from 'sequelize';
-import { BeneficiarioModel } from '../../models/sicap/Beneficiario.model';
+import { BeneficiarioModel } from '../../models/Beneficiario.model';
 import { sequelize } from '../../database/sequelize';
 
 export interface FichaBeneficiarioRow {
@@ -35,7 +35,7 @@ export const beneficiarioRepository = {
     nom_ben: string;
     pat_ben: string;
     mat_ben: string;
-    dir_ben: string;
+    dir_ben: string | null;
     fecnac_ben: string;
   }): Promise<BeneficiarioModel> {
     // Insert crudo: Sequelize serializa DataTypes.DATE con offset de zona horaria,

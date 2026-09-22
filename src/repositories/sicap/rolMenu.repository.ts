@@ -1,5 +1,5 @@
-import { RolMenuModel } from '../../models/sicap/RolMenu.model';
-import { MenuModel } from '../../models/sicap/Menu.model';
+import { RolMenuModel } from '../../models/RolMenu.model';
+import { MenuModel } from '../../models/Menu.model';
 
 export const rolMenuRepository = {
   async findAll(): Promise<RolMenuModel[]> {
