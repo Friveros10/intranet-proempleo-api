@@ -46,7 +46,8 @@ export const reemplazoBenProyectoController = {
       Number(req.params.id),
       req.body.status,
       Number(req.user.sub),
-      req
+      req,
+      req.body.comentarioRechazo ?? null,
     );
     res.status(200).json(reemplazo);
   },

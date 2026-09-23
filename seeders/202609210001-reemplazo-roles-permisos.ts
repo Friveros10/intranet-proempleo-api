@@ -36,7 +36,7 @@ const ROLES: RolSeed[] = [
   { corr_rol: 102, nom_rol: 'INTENDENCIA', est_rol: 'ACTIVO' },
 ];
 
-// Permisos (menús) propios del módulo de Reemplazo de Beneficiarios de Proyecto
+// Permisos (menús) propios de los módulos implementados
 // cod_men está limitado a VARCHAR(10) y Nom_men a VARCHAR(50) en la tabla legacy dbo.menus
 const MENUS_REEMPLAZO: MenuSeed[] = [
   { cod_men: 'REM_VERALL', Nom_men: 'Reemplazo: ver todos los registros' },
@@ -47,13 +47,16 @@ const MENUS_REEMPLAZO: MenuSeed[] = [
   { cod_men: 'REM_DOCAPR', Nom_men: 'Reemplazo: aprobar documentos' },
   { cod_men: 'REM_DOCREC', Nom_men: 'Reemplazo: rechazar documentos' },
   { cod_men: 'REM_FILTR', Nom_men: 'Reemplazo: filtro por región' },
+  { cod_men: 'BEN_VERALL', Nom_men: 'Beneficiarios: ver todos' },
+  { cod_men: 'BEN_VERCOM', Nom_men: 'Beneficiarios: ver comuna' },
+  { cod_men: 'BEN_CREAR', Nom_men: 'Beneficiarios: crear' },
 ];
 
 // Asignación de permisos por rol (usando los cod_men definidos arriba)
 const PERMISOS_POR_ROL: Record<string, string[]> = {
-  ADMIN: ['REM_VERALL', 'REM_CREAR', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR'],
-  MINISTERIO: ['REM_VERALL', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR'],
-  INTENDENCIA: ['REM_VERREG', 'REM_CREAR'],
+  ADMIN: ['REM_VERALL', 'REM_CREAR', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR', 'BEN_VERALL', 'BEN_CREAR'],
+  MINISTERIO: ['REM_VERALL', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR', 'BEN_VERALL', 'BEN_CREAR'],
+  INTENDENCIA: ['REM_VERREG', 'REM_CREAR', 'BEN_VERCOM'],
 };
 
 async function seedRoles(): Promise<void> {

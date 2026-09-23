@@ -81,11 +81,13 @@ export const reemplazoBenProyectoRepository = {
 
   async actualizarEstado(
     id: number,
-    status: ReemplazoStatus
+    status: ReemplazoStatus,
+    comentarioRechazo: string | null = null,
   ): Promise<ReemplazoBenProyectoModel | null> {
     const reemplazo = await ReemplazoBenProyectoModel.findByPk(id);
     if (!reemplazo) return null;
     reemplazo.status = status;
+    reemplazo.comentarioRechazo = comentarioRechazo;
     reemplazo.fechaAprobacionReemplazo = new Date().toISOString();
     await reemplazo.save();
     return reemplazo;

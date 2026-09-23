@@ -11,6 +11,7 @@ export interface ReemplazoBenProyecto {
   idProyecto: number;
   rutUsuarioSolicitante: number | null;
   status: ReemplazoStatus;
+  comentarioRechazo: string | null;
   fechaSolicitudReemplazo: string;
   fechaAprobacionReemplazo: string | null;
 }
@@ -27,6 +28,7 @@ export class ReemplazoBenProyectoModel
   declare idProyecto: number; //proyecto fol_pro
   declare rutUsuarioSolicitante: number | null; //rut de quien creó la solicitud
   declare status: ReemplazoStatus;
+  declare comentarioRechazo: string | null;
   declare fechaSolicitudReemplazo: string;
   declare fechaAprobacionReemplazo: string | null;
   // Asociación cargada solo cuando se hace include: [{ model: ProyectoModel, as: 'proyecto' }]
@@ -46,6 +48,7 @@ ReemplazoBenProyectoModel.init(
       defaultValue: 'pendiente',
       validate: { isIn: [['pendiente', 'aprobado', 'rechazado']] },
     },
+    comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaSolicitudReemplazo: { type: DataTypes.DATE, allowNull: false },
     fechaAprobacionReemplazo: { type: DataTypes.DATE, allowNull: true },
   },

@@ -7,6 +7,8 @@ import { RolMenuModel } from '../models/RolMenu.model';
 import { MenuModel } from '../models/Menu.model';
 import { ReemplazoBenProyectoModel } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
+import { RegionModel } from '../models/Region.model';
+import { CiudadModel } from '../models/Ciudad.model';
 
 /**
  * Define todas las relaciones (Sequelize) entre los modelos legacy SICAP y los
@@ -21,6 +23,10 @@ export function registrarAsociaciones(): void {
   // Proyectos <-> BenPro
   ProyectoModel.hasMany(BenProModel, { foreignKey: 'fol_pro', sourceKey: 'fol_pro', as: 'benpros' });
   BenProModel.belongsTo(ProyectoModel, { foreignKey: 'fol_pro', targetKey: 'fol_pro', as: 'proyecto' });
+
+  // Proyecto <-> catálogos
+  ProyectoModel.belongsTo(RegionModel, { foreignKey: 'reg_pro', targetKey: 'cod_region', as: 'region' });
+  ProyectoModel.belongsTo(CiudadModel, { foreignKey: 'ciu_pro', targetKey: 'cod_ciu', as: 'ciudad' });
 
   // Usuario <-> roles
   RolSicapModel.hasMany(UsuarioSicapModel, { foreignKey: 'corr_rol', sourceKey: 'corr_rol', as: 'usuarios' });

@@ -3,6 +3,7 @@ import { reemplazoBenProyectoRepository, ReemplazoFiltros } from '../repositorie
 import { docReemplazoBenProyectoRepository } from '../repositories/docReemplazoBenProyecto.repository';
 import { auditLogRepository } from '../repositories/auditLog.repository';
 import { beneficiarioRepository } from '../repositories/sicap/beneficiario.repository';
+import { planEgresoHistoricoRepository } from '../repositories/sicap/planEgresoHistorico.repository';
 import { proyectoRepository } from '../repositories/sicap/proyecto.repository';
 import { regionRepository } from '../repositories/sicap/region.repository';
 import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repository';
@@ -36,6 +37,10 @@ async function obtenerContextoUsuario(rutUsuario: number): Promise<ContextoUsuar
   };
 }
 
+function mensajePlanEgreso(anio: number | null): string {
+  return `El Rut no puede volver a ingresar al programa, ya que salio por plan de egreso el año ${anio ?? 'registrado'}`;
+}
+
 export const reemplazoBenProyectoService = {
   // Un usuario sin permiso "ver todas las regiones" (ej. INTENDENCIA) solo ve los
   // reemplazos de proyectos de su propia región, sin importar lo que pida por query.
@@ -65,12 +70,16 @@ export const reemplazoBenProyectoService = {
 
   // Crea la solicitud, el beneficiario nuevo (si no existe) y los documentos, todo junto
   async crear(data: CrearReemplazoInput, archivos: Express.Multer.File[], rutUsuarioSolicitante: number, req: Request) {
-    const [beneficiarioActual, proyecto, contexto] = await Promise.all([
+    const [beneficiarioActual, proyecto, contexto, planEgreso] = await Promise.all([
       beneficiarioRepository.findByRut(data.idBeneficiarioProyecto),
       proyectoRepository.findByFolio(data.idProyecto),
       obtenerContextoUsuario(rutUsuarioSolicitante),
+      planEgresoHistoricoRepository.findByRun(data.idBeneficiarioProyecto),
     ]);
 
+    if (planEgreso) {
+      throw new AppError(mensajePlanEgreso(planEgreso.anio), 409);
+    }
     if (!beneficiarioActual) {
       throw new AppError('El beneficiario a reemplazar no existe', 404);
     }
@@ -105,6 +114,8 @@ export const reemplazoBenProyectoService = {
         mat_ben: data.nuevoBeneficiario.apellidoMaterno,
         dir_ben: data.nuevoBeneficiario.direccion ?? null,
         fecnac_ben: data.nuevoBeneficiario.fechaNacimiento,
+        //agregar campo status para diferenciar los que vienen creados legacy y los que se crean mediante este flujo
+        reg_ben: contexto.regionUsuario ?? null,
       });
     }
 
@@ -142,7 +153,7 @@ export const reemplazoBenProyectoService = {
     return reemplazoCompleto;
   },
 
-  async actualizarEstado(id: number, status: ReemplazoStatus, rutUsuario: number, req: Request) {
+  async actualizarEstado(id: number, status: ReemplazoStatus, rutUsuario: number, req: Request, comentarioRechazo?: string | null) {
     const contexto = await obtenerContextoUsuario(rutUsuario);
     const permisoRequerido = status === 'aprobado' ? PERMISO_APROBAR : PERMISO_RECHAZAR;
     if (!contexto.permisos.includes(permisoRequerido)) {
@@ -150,7 +161,8 @@ export const reemplazoBenProyectoService = {
     }
 
     const reemplazoActual = await reemplazoBenProyectoRepository.findById(id);
-    const actualizado = await reemplazoBenProyectoRepository.actualizarEstado(id, status);
+    const comentario = status === 'rechazado' ? (comentarioRechazo ?? '').trim() || null : null;
+    const actualizado = await reemplazoBenProyectoRepository.actualizarEstado(id, status, comentario);
     if (!actualizado) {
       throw new AppError('Reemplazo no encontrado', 404);
     }
@@ -162,7 +174,7 @@ export const reemplazoBenProyectoService = {
       entidad: 'Reemplazo_benpro',
       registroId: String(id),
       region: reemplazoActual?.proyecto?.reg_pro ?? null,
-      detalle: `Solicitud de reemplazo ${status}`,
+      detalle: status === 'rechazado' && comentario ? comentario : `Solicitud de reemplazo ${status}`,
       req,
     });
     return actualizado;
