@@ -349,12 +349,15 @@ export const beneficiarioRepository = {
     dir_ben: string | null;
     reg_ben: number | null;
     fecnac_ben: string;
+    usu_cre: string;
+    fec_cre: Date;
+    statusFicha: number;
   }): Promise<BeneficiarioModel> {
     // Insert crudo: Sequelize serializa DataTypes.DATE con offset de zona horaria,
     // lo que SQL Server rechaza para la columna datetime fecnac_ben.
     await sequelize.query(
-      `INSERT INTO dbo.BENEFICIARIOS (rut_ben, dig_ben, nom_ben, pat_ben, mat_ben, dir_ben, reg_ben, fecnac_ben)
-       VALUES (:rut_ben, :dig_ben, :nom_ben, :pat_ben, :mat_ben, :dir_ben, :reg_ben, :fecnac_ben)`,
+      `INSERT INTO dbo.BENEFICIARIOS (rut_ben, dig_ben, nom_ben, pat_ben, mat_ben, dir_ben, reg_ben, fecnac_ben, usu_cre, fec_cre, statusFicha)
+       VALUES (:rut_ben, :dig_ben, :nom_ben, :pat_ben, :mat_ben, :dir_ben, :reg_ben, :fecnac_ben, :usu_cre, :fec_cre, :statusFicha)`,
       { replacements: data, type: QueryTypes.INSERT },
     );
     return BeneficiarioModel.findByPk(

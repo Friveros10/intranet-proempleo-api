@@ -29,8 +29,14 @@ export const crearReemplazoSchema = z.object({
   body: z.object({
     idBeneficiarioProyecto: z.coerce.number({ required_error: 'idBeneficiarioProyecto es requerido' }).int(),
     idProyecto: z.coerce.number({ required_error: 'idProyecto es requerido' }).int(),
-    nuevoBeneficiario: jsonField(nuevoBeneficiarioSchema, 'nuevoBeneficiario inválido'),
-    idsDocumentos: jsonField(z.array(z.coerce.number().int()), 'idsDocumentos inválido'),
+    nuevosBeneficiarios: jsonField(
+      z.array(nuevoBeneficiarioSchema).length(3, 'Se deben ingresar exactamente tres beneficiarios nuevos'),
+      'nuevosBeneficiarios inválido',
+    ),
+    documentos: jsonField(
+      z.array(z.object({ rut: z.string().min(2), idDocumento: z.coerce.number().int() })),
+      'documentos inválido',
+    ),
   }),
 });
 

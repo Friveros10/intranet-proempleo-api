@@ -55,6 +55,8 @@ export interface Beneficiario {
   tip_mar: string | null;
   telrec_ben: string | null;
   codtelrec_ben: string | null;
+  status: number;
+  statusFicha: number;
 }
 
 type BeneficiarioCreation = Optional<Beneficiario, 'rut_ben'>;
@@ -113,6 +115,8 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare tip_mar: string | null;
   declare telrec_ben: string | null;
   declare codtelrec_ben: string | null;
+  declare status: number;
+  declare statusFicha: number;
 }
 
 BeneficiarioModel.init(
@@ -170,6 +174,8 @@ BeneficiarioModel.init(
     tip_mar: DataTypes.STRING,
     telrec_ben: DataTypes.STRING,
     codtelrec_ben: DataTypes.STRING,
+    status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    statusFicha: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 2 },
   },
   { sequelize, tableName: 'BENEFICIARIOS', schema: 'dbo', timestamps: false }
 );

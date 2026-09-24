@@ -9,7 +9,7 @@ import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repos
 import { planEgresoHistoricoService } from './planEgresoHistorico.service';
 import { AppError } from '../utils/AppError';
 import { parseRut } from '../utils/rut';
-import { esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
+import { DOCUMENTOS_REEMPLAZO, esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
 import { guardarDocumentoEnDisco } from '../middlewares/upload.middleware';
 import { CrearReemplazoInput } from '../validations/reemplazoBenProyecto.validation';
 import { ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
@@ -86,65 +86,87 @@ export const reemplazoBenProyectoService = {
       throw new AppError('El beneficiario no pertenece a tu zona', 403);
     }
 
-    if (data.idsDocumentos.length !== archivos.length) {
+    if (data.documentos.length !== archivos.length) {
       throw new AppError('La cantidad de documentos no coincide con los archivos recibidos', 400);
     }
-    for (const idDocumento of data.idsDocumentos) {
-      if (!esDocumentoReemplazoValido(idDocumento)) {
+    const candidatos = data.nuevosBeneficiarios.map((beneficiario) => ({
+      beneficiario,
+      ...parseRut(beneficiario.rut),
+    }));
+    if (new Set(candidatos.map((candidato) => candidato.cuerpo)).size !== candidatos.length) {
+      throw new AppError('Los RUT de los nuevos beneficiarios no pueden repetirse', 400);
+    }
+    await Promise.all(
+      candidatos.map((candidato) => planEgresoHistoricoService.validarPuedeIngresarPorRun(candidato.cuerpo)),
+    );
+
+    const documentosPorRut = new Map<number, { idDocumento: number; archivo: Express.Multer.File }[]>();
+    for (let index = 0; index < data.documentos.length; index += 1) {
+      const documento = data.documentos[index];
+      const { cuerpo } = parseRut(documento.rut);
+      if (!candidatos.some((candidato) => candidato.cuerpo === cuerpo) || !esDocumentoReemplazoValido(documento.idDocumento)) {
         throw new AppError('idDocumento no corresponde a un documento válido', 400);
+      }
+      const documentos = documentosPorRut.get(cuerpo) ?? [];
+      documentos.push({ idDocumento: documento.idDocumento, archivo: archivos[index] });
+      documentosPorRut.set(cuerpo, documentos);
+    }
+    for (const candidato of candidatos) {
+      const documentos = documentosPorRut.get(candidato.cuerpo) ?? [];
+      const ids = documentos.map((documento) => documento.idDocumento);
+      if (documentos.length !== DOCUMENTOS_REEMPLAZO.length || new Set(ids).size !== DOCUMENTOS_REEMPLAZO.length || !DOCUMENTOS_REEMPLAZO.every((tipo) => ids.includes(tipo.id))) {
+        throw new AppError(`Debes adjuntar todos los documentos requeridos para ${candidato.beneficiario.rut}`, 400);
       }
     }
 
-    const { cuerpo: rutNuevo, dv } = parseRut(data.nuevoBeneficiario.rut);
+    const reemplazos = [];
+    for (const candidato of candidatos) {
+      const beneficiarioNuevoExistente = await beneficiarioRepository.findByRut(candidato.cuerpo);
+      if (!beneficiarioNuevoExistente) {
+        await beneficiarioRepository.create({
+          rut_ben: candidato.cuerpo,
+          dig_ben: candidato.dv,
+          nom_ben: candidato.beneficiario.nombres,
+          pat_ben: candidato.beneficiario.apellidoPaterno,
+          mat_ben: candidato.beneficiario.apellidoMaterno,
+          dir_ben: candidato.beneficiario.direccion ?? null,
+          fecnac_ben: candidato.beneficiario.fechaNacimiento,
+          reg_ben: contexto.regionUsuario ?? null,
+          usu_cre: String(rutUsuarioSolicitante),
+          fec_cre: new Date(),
+          statusFicha: 1,
+        });
+      }
 
-    // Si el nuevo beneficiario aún no existe en la tabla legacy, se crea (rut sin dv es la PK)
-    const beneficiarioNuevoExistente = await beneficiarioRepository.findByRut(rutNuevo);
-    if (!beneficiarioNuevoExistente) {
-      await beneficiarioRepository.create({
-        rut_ben: rutNuevo,
-        dig_ben: dv,
-        nom_ben: data.nuevoBeneficiario.nombres,
-        pat_ben: data.nuevoBeneficiario.apellidoPaterno,
-        mat_ben: data.nuevoBeneficiario.apellidoMaterno,
-        dir_ben: data.nuevoBeneficiario.direccion ?? null,
-        fecnac_ben: data.nuevoBeneficiario.fechaNacimiento,
-        //agregar campo status para diferenciar los que vienen creados legacy y los que se crean mediante este flujo
-        reg_ben: contexto.regionUsuario ?? null,
+      const reemplazo = await reemplazoBenProyectoRepository.create({
+        idBeneficiarioProyecto: data.idBeneficiarioProyecto,
+        idBeneficiarioNuevo: candidato.cuerpo,
+        idProyecto: data.idProyecto,
+        rutUsuarioSolicitante,
       });
-    }
-
-    const reemplazo = await reemplazoBenProyectoRepository.create({
-      idBeneficiarioProyecto: data.idBeneficiarioProyecto,
-      idBeneficiarioNuevo: rutNuevo,
-      idProyecto: data.idProyecto,
-      rutUsuarioSolicitante,
-    });
-
-    // Los 5 documentos se guardan juntos, una vez que la solicitud ya tiene id
-    for (let i = 0; i < archivos.length; i += 1) {
-      const archivoUrl = guardarDocumentoEnDisco(reemplazo.id, archivos[i]);
-      await docReemplazoBenProyectoRepository.create({
-        idReemplazoBenProyecto: reemplazo.id,
-        idDocumento: data.idsDocumentos[i],
-        idBeneficiario: rutNuevo,
-        nombreArchivo: archivos[i].originalname,
-        archivoUrl,
+      for (const documento of documentosPorRut.get(candidato.cuerpo) ?? []) {
+        const archivoUrl = guardarDocumentoEnDisco(reemplazo.id, documento.archivo);
+        await docReemplazoBenProyectoRepository.create({
+          idReemplazoBenProyecto: reemplazo.id,
+          idDocumento: documento.idDocumento,
+          idBeneficiario: candidato.cuerpo,
+          nombreArchivo: documento.archivo.originalname,
+          archivoUrl,
+        });
+      }
+      await auditLogRepository.registrar({
+        usuarioId: rutUsuarioSolicitante,
+        accion: 'REEMPLAZO_CREADO',
+        modulo: 'REEMPLAZOS',
+        entidad: 'Reemplazo_benpro',
+        registroId: String(reemplazo.id),
+        region: proyecto.reg_pro ?? beneficiarioActual.reg_ben ?? null,
+        detalle: `Solicitud de reemplazo creada para proyecto ${data.idProyecto}`,
+        req,
       });
+      reemplazos.push(await reemplazoBenProyectoRepository.findById(reemplazo.id));
     }
-
-    await auditLogRepository.registrar({
-      usuarioId: rutUsuarioSolicitante,
-      accion: 'REEMPLAZO_CREADO',
-      modulo: 'REEMPLAZOS',
-      entidad: 'Reemplazo_benpro',
-      registroId: String(reemplazo.id),
-      region: proyecto.reg_pro ?? beneficiarioActual.reg_ben ?? null,
-      detalle: `Solicitud de reemplazo creada para proyecto ${data.idProyecto}`,
-      req,
-    });
-
-    const reemplazoCompleto = await reemplazoBenProyectoRepository.findById(reemplazo.id);
-    return reemplazoCompleto;
+    return reemplazos;
   },
 
   async actualizarEstado(id: number, status: ReemplazoStatus, rutUsuario: number, req: Request, comentarioRechazo?: string | null) {

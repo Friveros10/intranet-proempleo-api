@@ -153,9 +153,9 @@ export const beneficiarioService = {
       throw new AppError("El beneficiario no pertenece a tu zona", 404);
     }
 
-    if (ficha.tiene_reemplazo > 0) {
-      throw new AppError("El beneficiario tiene un reemplazo en curso", 404);
-    }
+    // if (ficha.tiene_reemplazo > 0) {
+    //   throw new AppError("El beneficiario tiene un reemplazo en curso", 404);
+    // }
 
     const proyecto = await proyectoRepository.findByFolio(ficha.folio_vigente);
     if (!proyecto) {
