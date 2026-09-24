@@ -3,10 +3,10 @@ import { reemplazoBenProyectoRepository, ReemplazoFiltros } from '../repositorie
 import { docReemplazoBenProyectoRepository } from '../repositories/docReemplazoBenProyecto.repository';
 import { auditLogRepository } from '../repositories/auditLog.repository';
 import { beneficiarioRepository } from '../repositories/sicap/beneficiario.repository';
-import { planEgresoHistoricoRepository } from '../repositories/sicap/planEgresoHistorico.repository';
 import { proyectoRepository } from '../repositories/sicap/proyecto.repository';
 import { regionRepository } from '../repositories/sicap/region.repository';
 import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repository';
+import { planEgresoHistoricoService } from './planEgresoHistorico.service';
 import { AppError } from '../utils/AppError';
 import { parseRut } from '../utils/rut';
 import { esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
@@ -35,10 +35,6 @@ async function obtenerContextoUsuario(rutUsuario: number): Promise<ContextoUsuar
     puedeVerTodasLasRegiones: permisos.includes(PERMISO_VER_TODAS_REGIONES),
     permisos,
   };
-}
-
-function mensajePlanEgreso(anio: number | null): string {
-  return `El Rut no puede volver a ingresar al programa, ya que salio por plan de egreso el año ${anio ?? 'registrado'}`;
 }
 
 export const reemplazoBenProyectoService = {
@@ -70,16 +66,14 @@ export const reemplazoBenProyectoService = {
 
   // Crea la solicitud, el beneficiario nuevo (si no existe) y los documentos, todo junto
   async crear(data: CrearReemplazoInput, archivos: Express.Multer.File[], rutUsuarioSolicitante: number, req: Request) {
-    const [beneficiarioActual, proyecto, contexto, planEgreso] = await Promise.all([
+    const [beneficiarioActual, proyecto, contexto] = await Promise.all([
       beneficiarioRepository.findByRut(data.idBeneficiarioProyecto),
       proyectoRepository.findByFolio(data.idProyecto),
       obtenerContextoUsuario(rutUsuarioSolicitante),
-      planEgresoHistoricoRepository.findByRun(data.idBeneficiarioProyecto),
     ]);
 
-    if (planEgreso) {
-      throw new AppError(mensajePlanEgreso(planEgreso.anio), 409);
-    }
+    await planEgresoHistoricoService.validarPuedeIngresarPorRun(data.idBeneficiarioProyecto);
+
     if (!beneficiarioActual) {
       throw new AppError('El beneficiario a reemplazar no existe', 404);
     }

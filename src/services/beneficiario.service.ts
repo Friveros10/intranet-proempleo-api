@@ -4,7 +4,6 @@ import {
   FichaBeneficiarioRow,
 } from "../repositories/sicap/beneficiario.repository";
 import { proyectoRepository } from "../repositories/sicap/proyecto.repository";
-import { planEgresoHistoricoRepository } from "../repositories/sicap/planEgresoHistorico.repository";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
 import { auditLogRepository } from "../repositories/auditLog.repository";
 import { ProyectoModel } from "../models/Proyecto.model";
@@ -28,10 +27,6 @@ function limpiarRut(rutFormateado: string): number {
     throw new AppError("RUT inválido", 400);
   }
   return rut;
-}
-
-function mensajePlanEgreso(anio: number | null): string {
-  return `El Rut no puede volver a ingresar al programa, ya que salio por plan de egreso el año ${anio ?? "registrado"}`;
 }
 
 export const beneficiarioService = {
@@ -142,15 +137,11 @@ export const beneficiarioService = {
     rutUsuario: number,
   ): Promise<{ beneficiario: FichaBeneficiarioRow; proyecto: ProyectoModel }> {
     const rut = limpiarRut(rutFormateado);
-    const [ficha, usuario, permisos, planEgreso] = await Promise.all([
+    const [ficha, usuario, permisos] = await Promise.all([
       beneficiarioRepository.findByRutFromBenPro(rut),
       usuarioSicapRepository.findByRut(rutUsuario),
       usuarioSicapRepository.getPermisosDeUsuario(rutUsuario),
-      planEgresoHistoricoRepository.findByRun(rut),
     ]);
-    if (planEgreso) {
-      throw new AppError(mensajePlanEgreso(planEgreso.anio), 409);
-    }
     if (!ficha) {
       throw new AppError("No se encontró un beneficiario con ese RUT", 404);
     }
