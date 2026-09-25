@@ -74,7 +74,7 @@ export const reemplazoBenProyectoService = {
       obtenerContextoUsuario(rutUsuarioSolicitante),
     ]);
 
-    await planEgresoHistoricoService.validarPuedeIngresarPorRun(data.idBeneficiarioProyecto);
+    // await planEgresoHistoricoService.validarPuedeIngresarPorRun(data.idBeneficiarioProyecto);
     if (!beneficiarioActual) {
       throw new AppError('El beneficiario a reemplazar no existe', 404);
     }

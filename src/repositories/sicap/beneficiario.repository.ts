@@ -1,9 +1,11 @@
-import { QueryTypes } from "sequelize";
+import { Op } from "sequelize";
 import { BeneficiarioModel } from "../../models/Beneficiario.model";
 import { BenProModel } from "../../models/BenPro.model";
 import { ProyectoModel } from "../../models/Proyecto.model";
 import { RegionModel } from "../../models/Region.model";
 import { CiudadModel } from "../../models/Ciudad.model";
+import { ComunaModel } from "../../models/Comuna.model";
+import { ReemplazoBenProyectoModel } from "../../models/ReemplazoBenProyecto.model";
 import { sequelize } from "../../database/sequelize";
 import {
   CompletarFichaBeneficiarioInput,
@@ -100,10 +102,6 @@ type BenProConProyecto = BenProModel & {
   }) | null;
 };
 
-interface CountRow {
-  total: number;
-}
-
 function formatearMesAno(ano: number, mes: number): string {
   return `${String(mes).padStart(2, "0")}-${ano}`;
 }
@@ -123,39 +121,73 @@ function buildBeneficiarioWhere(
   filtros: ListarBeneficiariosQuery,
   comunaUsuario?: number | null,
 ) {
-  const where: string[] = ["b.statusFicha > 0", "b.status > 0"];
-  const replacements: Record<string, string | number> = {};
+  const and: Record<string, unknown>[] = [
+    { statusFicha: { [Op.gt]: 0 } },
+    { status: { [Op.gt]: 0 } },
+  ];
 
   if (comunaUsuario) {
-    where.push("b.com_ben = :comunaUsuario");
-    replacements.comunaUsuario = comunaUsuario;
+    and.push({ com_ben: comunaUsuario });
   } else {
     if (filtros.region) {
-      where.push("b.reg_ben = :region");
-      replacements.region = filtros.region;
+      and.push({ reg_ben: filtros.region });
     }
     if (filtros.ciudad) {
-      where.push("b.ciu_ben = :ciudad");
-      replacements.ciudad = filtros.ciudad;
+      and.push({ ciu_ben: filtros.ciudad });
     }
     if (filtros.comuna) {
-      where.push("b.com_ben = :comuna");
-      replacements.comuna = filtros.comuna;
+      and.push({ com_ben: filtros.comuna });
     }
   }
 
   if (filtros.search) {
-    where.push(`(
-      CAST(b.rut_ben AS VARCHAR(20)) LIKE :search OR
-      b.nom_ben LIKE :search OR
-      b.pat_ben LIKE :search OR
-      b.mat_ben LIKE :search
-    )`);
-    replacements.search = `%${filtros.search}%`;
+    const termino = `%${filtros.search}%`;
+    and.push({
+      [Op.or]: [
+        sequelize.where(sequelize.cast(sequelize.col("rut_ben"), "VARCHAR(20)"), {
+          [Op.like]: termino,
+        }),
+        { nom_ben: { [Op.like]: termino } },
+        { pat_ben: { [Op.like]: termino } },
+        { mat_ben: { [Op.like]: termino } },
+      ],
+    });
   }
 
-  return { where: where.join(" AND "), replacements };
+  return { [Op.and]: and };
 }
+
+// Atributos e includes compartidos por los listados de beneficiarios: agrega los
+// nombres de región/ciudad/comuna vía LEFT JOIN y formatea fecnac_ben sin hora.
+const ATRIBUTOS_LISTADO: any[] = [
+  "rut_ben",
+  "dig_ben",
+  "nom_ben",
+  "pat_ben",
+  "mat_ben",
+  "dir_ben",
+  "reg_ben",
+  "ciu_ben",
+  "com_ben",
+  [
+    sequelize.fn("CONVERT", sequelize.literal("VARCHAR(10)"), sequelize.col("fecnac_ben"), 23),
+    "fecnac_ben",
+  ],
+  "sex_ben",
+  "tel_ben",
+  "cel_ben",
+  "status",
+  "statusFicha",
+  [sequelize.col("region.Nom_region"), "nombre_region"],
+  [sequelize.col("ciudad.nom_ciu"), "nombre_ciudad"],
+  [sequelize.col("comuna.nom_com"), "nombre_comuna"],
+];
+
+const INCLUDES_LISTADO = [
+  { model: RegionModel, as: "region", attributes: [], required: false },
+  { model: CiudadModel, as: "ciudad", attributes: [], required: false },
+  { model: ComunaModel, as: "comuna", attributes: [], required: false },
+];
 
 export const beneficiarioRepository = {
   async findAll(): Promise<BeneficiarioModel[]> {
@@ -169,96 +201,42 @@ export const beneficiarioRepository = {
   async findListadoByRut(
     rut_ben: number,
   ): Promise<BeneficiarioListadoRow | null> {
-    const rows = await sequelize.query<BeneficiarioListadoRow>(
-      `SELECT
-          b.rut_ben,
-          b.dig_ben,
-          b.nom_ben,
-          b.pat_ben,
-          b.mat_ben,
-          b.dir_ben,
-          b.reg_ben,
-          r.Nom_region AS nombre_region,
-          b.ciu_ben,
-          c.nom_ciu AS nombre_ciudad,
-          b.com_ben,
-          co.nom_com AS nombre_comuna,
-          CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
-          b.sex_ben,
-          b.tel_ben,
-          b.cel_ben,
-          b.status,
-          b.statusFicha
-       FROM dbo.BENEFICIARIOS b
-       LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
-       LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
-       LEFT JOIN dbo.COMUNAS co ON b.com_ben = co.cod_com
-       WHERE b.rut_ben = :rut_ben`,
-      { replacements: { rut_ben }, type: QueryTypes.SELECT },
-    );
-    return rows[0] ?? null;
+    const row = await BeneficiarioModel.findOne({
+      where: { rut_ben },
+      attributes: ATRIBUTOS_LISTADO,
+      include: INCLUDES_LISTADO,
+      raw: true,
+    });
+    return (row as unknown as BeneficiarioListadoRow) ?? null;
   },
 
   async findAllListado(
     filtros: ListarBeneficiariosQuery,
     comunaUsuario?: number | null,
   ): Promise<BeneficiarioListadoPaginado> {
-    const { where, replacements } = buildBeneficiarioWhere(
-      filtros,
-      comunaUsuario,
-    );
+    const where = buildBeneficiarioWhere(filtros, comunaUsuario);
     const page = filtros.page;
     const limit = 50;
     const offset = (page - 1) * limit;
-    const countRows = await sequelize.query<CountRow>(
-      `SELECT COUNT(1) AS total
-       FROM dbo.BENEFICIARIOS b
-       LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
-       LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
-       LEFT JOIN dbo.COMUNAS co ON b.com_ben = co.cod_com
-       WHERE ${where}`,
-      { replacements, type: QueryTypes.SELECT },
-    );
-    const total = Number(countRows[0]?.total ?? 0);
-    const data = await sequelize.query<BeneficiarioListadoRow>(
-      `SELECT
-          b.rut_ben,
-          b.dig_ben,
-          b.nom_ben,
-          b.pat_ben,
-          b.mat_ben,
-          b.dir_ben,
-          b.reg_ben,
-          r.Nom_region AS nombre_region,
-          b.ciu_ben,
-          c.nom_ciu AS nombre_ciudad,
-          b.com_ben,
-          co.nom_com AS nombre_comuna,
-          CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
-          b.sex_ben,
-          b.tel_ben,
-          b.cel_ben,
-          b.status,
-          b.statusFicha
-       FROM dbo.BENEFICIARIOS b
-       LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
-       LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
-       LEFT JOIN dbo.COMUNAS co ON b.com_ben = co.cod_com
-       WHERE ${where}
-       ORDER BY statusFicha asc
-       OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-      {
-        replacements: { ...replacements, offset, limit },
-        type: QueryTypes.SELECT,
-      },
-    );
+
+    const { count, rows } = await BeneficiarioModel.findAndCountAll({
+      where,
+      attributes: ATRIBUTOS_LISTADO,
+      include: INCLUDES_LISTADO,
+      order: [["statusFicha", "ASC"]],
+      limit,
+      offset,
+      subQuery: false,
+      raw: true,
+    });
+
     return {
-      data,
+      data: rows as unknown as BeneficiarioListadoRow[],
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / limit)),
+        total: count,
+        totalPages: Math.max(1, Math.ceil(count / limit)),
       },
     };
   },
@@ -437,11 +415,9 @@ export const beneficiarioRepository = {
   },
 
   async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
-    const [, affected] = await sequelize.query(
-      `UPDATE dbo.BENEFICIARIOS
-       SET status = -1, usu_eli = :usu_eli, fec_eli = GETDATE()
-       WHERE rut_ben = :rut_ben AND status > 0`,
-      { replacements: { rut_ben, usu_eli }, type: QueryTypes.UPDATE },
+    const [affected] = await BeneficiarioModel.update(
+      { status: -1, usu_eli, fec_eli: sequelize.fn("GETDATE") as unknown as Date },
+      { where: { rut_ben, status: { [Op.gt]: 0 } } },
     );
     return affected ?? 0;
   },
@@ -451,110 +427,103 @@ export const beneficiarioRepository = {
     data: CompletarFichaBeneficiarioInput,
     usu_mod: string,
   ): Promise<BeneficiarioModel> {
-    await sequelize.query(
-      `UPDATE dbo.BENEFICIARIOS
-       SET ciu_ben = :ciudad,
-           com_ben = :comuna,
-           reg_ben = :region,
-           dir_ben = :direccion,
-           sex_ben = :sexo,
-           tel_ben = :telefono,
-           cel_ben = :celular,
-           statusFicha = 2,
-           usu_mod = :usu_mod,
-           fec_mod = GETDATE()
-       WHERE rut_ben = :rut_ben`,
+    await BeneficiarioModel.update(
       {
-        replacements: {
-          rut_ben,
-          region: data.region,
-          ciudad: data.ciudad,
-          comuna: data.comuna,
-          direccion: data.direccion ?? null,
-          sexo:
-            data.sexo === null || data.sexo === undefined
-              ? null
-              : String(data.sexo),
-          telefono: data.telefono ?? null,
-          celular: data.celular ?? null,
-          usu_mod,
-        },
-        type: QueryTypes.UPDATE,
+        ciu_ben: data.ciudad,
+        com_ben: data.comuna,
+        reg_ben: data.region,
+        dir_ben: data.direccion ?? null,
+        sex_ben:
+          data.sexo === null || data.sexo === undefined
+            ? null
+            : String(data.sexo),
+        tel_ben: data.telefono ?? null,
+        cel_ben: data.celular ?? null,
+        statusFicha: 2,
+        usu_mod,
+        fec_mod: sequelize.fn("GETDATE") as unknown as Date,
       },
+      { where: { rut_ben } },
     );
     return BeneficiarioModel.findByPk(rut_ben) as Promise<BeneficiarioModel>;
   },
 
   async listarRegiones(): Promise<CatalogoRegionRow[]> {
-    return sequelize.query<CatalogoRegionRow>(
-      `SELECT cod_region, Nom_region AS nom_region
-       FROM dbo.REGIONES
-       ORDER BY Nom_region`,
-      { type: QueryTypes.SELECT },
-    );
+    const regiones = await RegionModel.findAll({
+      attributes: ["cod_region", ["Nom_region", "nom_region"]],
+      order: [["Nom_region", "ASC"]],
+      raw: true,
+    });
+    return regiones as unknown as CatalogoRegionRow[];
   },
 
   async listarCiudades(cod_reg?: number): Promise<CatalogoCiudadRow[]> {
-    return sequelize.query<CatalogoCiudadRow>(
-      `SELECT cod_ciu, cod_reg, nom_ciu
-       FROM dbo.CIUDADES
-       ${cod_reg ? "WHERE cod_reg = :cod_reg" : ""}
-       ORDER BY nom_ciu`,
-      { replacements: cod_reg ? { cod_reg } : {}, type: QueryTypes.SELECT },
-    );
+    const ciudades = await CiudadModel.findAll({
+      attributes: ["cod_ciu", "cod_reg", "nom_ciu"],
+      where: cod_reg ? { cod_reg } : undefined,
+      order: [["nom_ciu", "ASC"]],
+      raw: true,
+    });
+    return ciudades as unknown as CatalogoCiudadRow[];
   },
 
   async listarComunas(cod_ciu?: number): Promise<CatalogoComunaRow[]> {
-    return sequelize.query<CatalogoComunaRow>(
-      `SELECT cod_com, cod_ciu, nom_com
-       FROM dbo.COMUNAS
-       ${cod_ciu ? "WHERE cod_ciu = :cod_ciu" : ""}
-       ORDER BY nom_com`,
-      { replacements: cod_ciu ? { cod_ciu } : {}, type: QueryTypes.SELECT },
-    );
+    const comunas = await ComunaModel.findAll({
+      attributes: ["cod_com", "cod_ciu", "nom_com"],
+      where: cod_ciu ? { cod_ciu } : undefined,
+      order: [["nom_com", "ASC"]],
+      raw: true,
+    });
+    return comunas as unknown as CatalogoComunaRow[];
   },
 
-  // Usa una query directa porque REGIONES, CIUDADES y COMUNAS aún no tienen modelo Sequelize
+  // El folio vigente y el último mes/año de BenPro se resuelven con el registro más
+  // reciente (equivalente a la fila TOP 1 que antes entregaba el OUTER APPLY).
   async findByRutFromBenPro(
     rut_ben: number,
   ): Promise<FichaBeneficiarioRow | null> {
-    const rows = await sequelize.query<FichaBeneficiarioRow>(
-      `SELECT
-          b.rut_ben,
-          b.nom_ben,
-          b.pat_ben,
-          b.mat_ben,
-          b.dir_ben,
-          b.reg_ben,
-          r.Nom_region AS nombre_region,
-          b.ciu_ben,
-          c.nom_ciu AS nombre_ciudad,
-          b.com_ben,
-          co.nom_com AS nombre_comuna,
-          b.civ_ben,
-          bp.mes_benpro as ultimo_mes_benpro,
-          bp.ANO_benpro as ultimo_ano_benpro,
-          bp.folio_vigente as folio_vigente,
-          (select count(*) from Reemplazo_benpro rbp where b.rut_ben = rbp.idBeneficiarioProyecto) as tiene_reemplazo
-          FROM dbo.BENEFICIARIOS b
-          LEFT JOIN dbo.REGIONES r
-              ON b.reg_ben = r.cod_region
-          LEFT JOIN dbo.CIUDADES c
-              ON b.ciu_ben = c.cod_ciu
-          LEFT JOIN dbo.COMUNAS co
-              ON b.com_ben = co.cod_com
-          OUTER APPLY (
-              SELECT TOP 1
-                  mes_benpro,
-                  ANO_benpro,
-                  fol_pro as folio_vigente
-              FROM dbo.BENPRO
-              WHERE rut_ben = b.rut_ben
-              ORDER BY ano_BenPro desc, mes_benpro DESC
-          ) bp
-          WHERE b.rut_ben = :rut_ben`,
-      { replacements: { rut_ben }, type: QueryTypes.SELECT },
-    );
-    return rows[0] ?? null;
+    const beneficiario = await BeneficiarioModel.findOne({
+      where: { rut_ben },
+      attributes: [
+        "rut_ben",
+        "nom_ben",
+        "pat_ben",
+        "mat_ben",
+        "dir_ben",
+        "reg_ben",
+        "ciu_ben",
+        "com_ben",
+        "civ_ben",
+        [sequelize.col("region.Nom_region"), "nombre_region"],
+        [sequelize.col("ciudad.nom_ciu"), "nombre_ciudad"],
+        [sequelize.col("comuna.nom_com"), "nombre_comuna"],
+      ],
+      include: INCLUDES_LISTADO,
+      raw: true,
+    });
+    if (!beneficiario) return null;
+
+    const [ultimoBenPro, tieneReemplazo] = await Promise.all([
+      BenProModel.findOne({
+        where: { rut_ben },
+        attributes: ["mes_benpro", "ano_BenPro", "fol_pro"],
+        order: [
+          ["ano_BenPro", "DESC"],
+          ["mes_benpro", "DESC"],
+        ],
+        raw: true,
+      }),
+      ReemplazoBenProyectoModel.count({
+        where: { idBeneficiarioProyecto: rut_ben },
+      }),
+    ]);
+
+    return {
+      ...(beneficiario as unknown as FichaBeneficiarioRow),
+      ultimo_mes_benpro: ultimoBenPro?.mes_benpro ?? null,
+      ultimo_ano_benpro: ultimoBenPro?.ano_BenPro ?? null,
+      folio_vigente: (ultimoBenPro?.fol_pro ?? null) as unknown as number,
+      tiene_reemplazo: tieneReemplazo,
+    };
   },
 };
