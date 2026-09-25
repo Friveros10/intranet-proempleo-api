@@ -10,7 +10,9 @@ export type AuditAccion =
   | 'DOCUMENTO_APROBADO'
   | 'DOCUMENTO_RECHAZADO'
   | 'DOCUMENTO_REEMPLAZADO'
-  | 'BENEFICIARIO_CREADO';
+  | 'BENEFICIARIO_CREADO'
+  | 'BENEFICIARIO_ELIMINADO'
+  | 'BENEFICIARIO_FICHA_COMPLETADA';
 
 export type AuditEstadoNotificacion = 'pendiente' | 'vista';
 export type AuditPerfilNotificacion = 'ADMIN' | 'MINISTERIO' | 'INTENDENCIA';

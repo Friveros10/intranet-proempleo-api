@@ -66,6 +66,8 @@ export const reemplazoBenProyectoService = {
 
   // Crea la solicitud, el beneficiario nuevo (si no existe) y los documentos, todo junto
   async crear(data: CrearReemplazoInput, archivos: Express.Multer.File[], rutUsuarioSolicitante: number, req: Request) {
+    console.log("[reemplazoBenProyectoService.crear] data recibida:", data);
+    console.log("[reemplazoBenProyectoService.crear] cantidad de archivos:", archivos.length);
     const [beneficiarioActual, proyecto, contexto] = await Promise.all([
       beneficiarioRepository.findByRut(data.idBeneficiarioProyecto),
       proyectoRepository.findByFolio(data.idProyecto),
@@ -73,7 +75,6 @@ export const reemplazoBenProyectoService = {
     ]);
 
     await planEgresoHistoricoService.validarPuedeIngresarPorRun(data.idBeneficiarioProyecto);
-
     if (!beneficiarioActual) {
       throw new AppError('El beneficiario a reemplazar no existe', 404);
     }
@@ -121,8 +122,10 @@ export const reemplazoBenProyectoService = {
 
     const reemplazos = [];
     for (const candidato of candidatos) {
+      console.log("[reemplazoBenProyectoService.crear] procesando candidato:", candidato.cuerpo);
       const beneficiarioNuevoExistente = await beneficiarioRepository.findByRut(candidato.cuerpo);
       if (!beneficiarioNuevoExistente) {
+        console.log("[reemplazoBenProyectoService.crear] beneficiario no existe, creando:", candidato.beneficiario);
         await beneficiarioRepository.create({
           rut_ben: candidato.cuerpo,
           dig_ben: candidato.dv,
@@ -136,6 +139,7 @@ export const reemplazoBenProyectoService = {
           fec_cre: new Date(),
           statusFicha: 1,
         });
+        console.log("[reemplazoBenProyectoService.crear] beneficiario creado para rut:", candidato.cuerpo);
       }
 
       const reemplazo = await reemplazoBenProyectoRepository.create({
@@ -144,6 +148,7 @@ export const reemplazoBenProyectoService = {
         idProyecto: data.idProyecto,
         rutUsuarioSolicitante,
       });
+      console.log("[reemplazoBenProyectoService.crear] reemplazo creado con id:", reemplazo.id);
       for (const documento of documentosPorRut.get(candidato.cuerpo) ?? []) {
         const archivoUrl = guardarDocumentoEnDisco(reemplazo.id, documento.archivo);
         await docReemplazoBenProyectoRepository.create({

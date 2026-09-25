@@ -23,6 +23,16 @@ export const beneficiarioController = {
     res.status(201).json(data);
   },
 
+  async eliminar(req: Request, res: Response): Promise<void> {
+    await beneficiarioService.eliminar(req.params.rut, Number(req.user!.sub), req);
+    res.status(204).send();
+  },
+
+  async completarFicha(req: Request, res: Response): Promise<void> {
+    const data = await beneficiarioService.completarFicha(req.params.rut, req.body, Number(req.user!.sub), req);
+    res.status(200).json(data);
+  },
+
   async listarRegiones(_req: Request, res: Response): Promise<void> {
     const data = await beneficiarioService.listarRegiones();
     res.status(200).json(data);

@@ -6,6 +6,7 @@ import { RegionModel } from "../../models/Region.model";
 import { CiudadModel } from "../../models/Ciudad.model";
 import { sequelize } from "../../database/sequelize";
 import {
+  CompletarFichaBeneficiarioInput,
   CrearBeneficiarioInput,
   ListarBeneficiariosQuery,
 } from "../../validations/beneficiario.validation";
@@ -46,6 +47,8 @@ export interface BeneficiarioListadoRow {
   sex_ben: string | null;
   tel_ben: string | null;
   cel_ben: string | null;
+  status: number;
+  statusFicha: number;
 }
 
 export interface ProyectoBeneficiarioRow {
@@ -105,11 +108,22 @@ function formatearMesAno(ano: number, mes: number): string {
   return `${String(mes).padStart(2, "0")}-${ano}`;
 }
 
+// Todas las columnas fec* son datetime en SQL Server. Al pasar un Date como parámetro
+// bindeado, el driver mssql lo serializa con offset ("+00:00"), formato que la columna
+// rechaza. Se inserta como literal SQL ISO ("YYYY-MM-DD"), que SQL Server siempre
+// interpreta sin ambigüedad, sin importar el idioma/DATEFORMAT configurado.
+function fechaIsoLiteral(fechaIso: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaIso)) {
+    throw new Error(`Fecha con formato inválido: ${fechaIso}`);
+  }
+  return sequelize.literal(`'${fechaIso}'`);
+}
+
 function buildBeneficiarioWhere(
   filtros: ListarBeneficiariosQuery,
   comunaUsuario?: number | null,
 ) {
-  const where: string[] = ["1 = 1"];
+  const where: string[] = ["b.statusFicha > 0", "b.status > 0"];
   const replacements: Record<string, string | number> = {};
 
   if (comunaUsuario) {
@@ -172,7 +186,9 @@ export const beneficiarioRepository = {
           CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
           b.sex_ben,
           b.tel_ben,
-          b.cel_ben
+          b.cel_ben,
+          b.status,
+          b.statusFicha
        FROM dbo.BENEFICIARIOS b
        LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
        LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
@@ -221,13 +237,15 @@ export const beneficiarioRepository = {
           CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
           b.sex_ben,
           b.tel_ben,
-          b.cel_ben
+          b.cel_ben,
+          b.status,
+          b.statusFicha
        FROM dbo.BENEFICIARIOS b
        LEFT JOIN dbo.REGIONES r ON b.reg_ben = r.cod_region
        LEFT JOIN dbo.CIUDADES c ON b.ciu_ben = c.cod_ciu
        LEFT JOIN dbo.COMUNAS co ON b.com_ben = co.cod_com
        WHERE ${where}
-       ORDER BY b.rut_ben DESC
+       ORDER BY statusFicha asc
        OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
       {
         replacements: { ...replacements, offset, limit },
@@ -353,29 +371,105 @@ export const beneficiarioRepository = {
     fec_cre: Date;
     statusFicha: number;
   }): Promise<BeneficiarioModel> {
-    // Insert crudo: Sequelize serializa DataTypes.DATE con offset de zona horaria,
-    // lo que SQL Server rechaza para la columna datetime fecnac_ben.
-    await sequelize.query(
-      `INSERT INTO dbo.BENEFICIARIOS (rut_ben, dig_ben, nom_ben, pat_ben, mat_ben, dir_ben, reg_ben, fecnac_ben, usu_cre, fec_cre, statusFicha)
-       VALUES (:rut_ben, :dig_ben, :nom_ben, :pat_ben, :mat_ben, :dir_ben, :reg_ben, :fecnac_ben, :usu_cre, :fec_cre, :statusFicha)`,
-      { replacements: data, type: QueryTypes.INSERT },
-    );
-    return BeneficiarioModel.findByPk(
-      data.rut_ben,
-    ) as Promise<BeneficiarioModel>;
+    console.log("[beneficiarioRepository.create] data recibida:", data);
+    // fecnac_ben llega como "DD-MM-YYYY"; se convierte a "YYYY-MM-DD" antes de armar el literal.
+    const [dia, mes, anio] = data.fecnac_ben.split("-").map(Number);
+    const fecnac_ben = `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+    console.log("[beneficiarioRepository.create] fecnac_ben parseada:", fecnac_ben);
+
+    try {
+      const creado = await BeneficiarioModel.create({
+        rut_ben: data.rut_ben,
+        dig_ben: data.dig_ben,
+        nom_ben: data.nom_ben,
+        pat_ben: data.pat_ben,
+        mat_ben: data.mat_ben,
+        dir_ben: data.dir_ben,
+        reg_ben: data.reg_ben,
+        fecnac_ben: fechaIsoLiteral(fecnac_ben) as unknown as Date,
+        usu_cre: data.usu_cre,
+        fec_cre: sequelize.fn("GETDATE") as unknown as Date,
+        status: 1,
+        statusFicha: data.statusFicha,
+      });
+      console.log("[beneficiarioRepository.create] beneficiario creado:", creado.toJSON());
+      return creado;
+    } catch (error) {
+      console.log("[beneficiarioRepository.create] error al crear beneficiario:", error);
+      throw error;
+    }
   },
 
   async createCompleto(
     data: CrearBeneficiarioInput & { rut_ben: number; dig_ben: string },
   ): Promise<BeneficiarioModel> {
+    console.log("[beneficiarioRepository.createCompleto] data recibida:", data);
+    // fechaNacimiento llega como "YYYY-MM-DD" (formato ISO).
+    console.log("[beneficiarioRepository.createCompleto] fecnac_ben:", data.fechaNacimiento);
+
+    try {
+      const creado = await BeneficiarioModel.create({
+        rut_ben: data.rut_ben,
+        dig_ben: data.dig_ben,
+        nom_ben: data.nombres,
+        pat_ben: data.apellidoPaterno,
+        mat_ben: data.apellidoMaterno,
+        dir_ben: data.direccion ?? null,
+        reg_ben: data.region,
+        ciu_ben: data.ciudad,
+        com_ben: data.comuna,
+        fecnac_ben: fechaIsoLiteral(data.fechaNacimiento) as unknown as Date,
+        sex_ben:
+          data.sexo === null || data.sexo === undefined
+            ? null
+            : String(data.sexo),
+        tel_ben: data.telefono ?? null,
+        cel_ben: data.celular ?? null,
+        status: 1,
+        statusFicha: 2,
+      });
+      console.log("[beneficiarioRepository.createCompleto] beneficiario creado:", creado.toJSON());
+      return creado;
+    } catch (error) {
+      console.log("[beneficiarioRepository.createCompleto] error al crear beneficiario:", error);
+      throw error;
+    }
+  },
+
+  async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
+    const [, affected] = await sequelize.query(
+      `UPDATE dbo.BENEFICIARIOS
+       SET status = -1, usu_eli = :usu_eli, fec_eli = GETDATE()
+       WHERE rut_ben = :rut_ben AND status > 0`,
+      { replacements: { rut_ben, usu_eli }, type: QueryTypes.UPDATE },
+    );
+    return affected ?? 0;
+  },
+
+  async completarFicha(
+    rut_ben: number,
+    data: CompletarFichaBeneficiarioInput,
+    usu_mod: string,
+  ): Promise<BeneficiarioModel> {
     await sequelize.query(
-      `INSERT INTO dbo.BENEFICIARIOS
-        (rut_ben, dig_ben, nom_ben, pat_ben, mat_ben, dir_ben, reg_ben, ciu_ben, com_ben, fecnac_ben, sex_ben, tel_ben, cel_ben)
-       VALUES
-        (:rut_ben, :dig_ben, :nombres, :apellidoPaterno, :apellidoMaterno, :direccion, :region, :ciudad, :comuna, :fechaNacimiento, :sexo, :telefono, :celular)`,
+      `UPDATE dbo.BENEFICIARIOS
+       SET ciu_ben = :ciudad,
+           com_ben = :comuna,
+           reg_ben = :region,
+           dir_ben = :direccion,
+           sex_ben = :sexo,
+           tel_ben = :telefono,
+           cel_ben = :celular,
+           statusFicha = 2,
+           usu_mod = :usu_mod,
+           fec_mod = GETDATE()
+       WHERE rut_ben = :rut_ben`,
       {
         replacements: {
-          ...data,
+          rut_ben,
+          region: data.region,
+          ciudad: data.ciudad,
+          comuna: data.comuna,
           direccion: data.direccion ?? null,
           sexo:
             data.sexo === null || data.sexo === undefined
@@ -383,13 +477,12 @@ export const beneficiarioRepository = {
               : String(data.sexo),
           telefono: data.telefono ?? null,
           celular: data.celular ?? null,
+          usu_mod,
         },
-        type: QueryTypes.INSERT,
+        type: QueryTypes.UPDATE,
       },
     );
-    return BeneficiarioModel.findByPk(
-      data.rut_ben,
-    ) as Promise<BeneficiarioModel>;
+    return BeneficiarioModel.findByPk(rut_ben) as Promise<BeneficiarioModel>;
   },
 
   async listarRegiones(): Promise<CatalogoRegionRow[]> {
