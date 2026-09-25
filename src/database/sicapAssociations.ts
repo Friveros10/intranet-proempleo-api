@@ -38,6 +38,11 @@ export function registrarAsociaciones(): void {
   RolSicapModel.hasMany(UsuarioSicapModel, { foreignKey: 'corr_rol', sourceKey: 'corr_rol', as: 'usuarios' });
   UsuarioSicapModel.belongsTo(RolSicapModel, { foreignKey: 'corr_rol', targetKey: 'corr_rol', as: 'rol' });
 
+  // Usuario <-> catálogos
+  UsuarioSicapModel.belongsTo(RegionModel, { foreignKey: 'reg_usu', targetKey: 'cod_region', as: 'region' });
+  UsuarioSicapModel.belongsTo(CiudadModel, { foreignKey: 'ciu_usu', targetKey: 'cod_ciu', as: 'ciudad' });
+  UsuarioSicapModel.belongsTo(ComunaModel, { foreignKey: 'com_usu', targetKey: 'cod_com', as: 'comuna' });
+
   // rol_menu <-> menus
   MenuModel.hasMany(RolMenuModel, { foreignKey: 'corr_men', sourceKey: 'corr_men', as: 'rolMenus' });
   RolMenuModel.belongsTo(MenuModel, { foreignKey: 'corr_men', targetKey: 'corr_men', as: 'menu' });
