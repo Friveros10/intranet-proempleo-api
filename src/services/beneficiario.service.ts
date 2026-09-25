@@ -37,8 +37,8 @@ export const beneficiarioService = {
       usuarioSicapRepository.getPermisosDeUsuario(rutUsuario),
     ]);
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    const comunaUsuario = puedeVerTodos ? null : (usuario?.com_usu ?? -1);
-    return beneficiarioRepository.findAllListado(filtros, comunaUsuario);
+    const regionUsuario = puedeVerTodos ? null : (usuario?.reg_usu ?? -1);
+    return beneficiarioRepository.findAllListado(filtros, regionUsuario);
   },
 
   async obtenerPorRut(rutFormateado: string, rutUsuario: number) {
@@ -55,7 +55,7 @@ export const beneficiarioService = {
     }
 
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    if (!puedeVerTodos && beneficiario.com_ben !== usuario?.com_usu) {
+    if (!puedeVerTodos && beneficiario.reg_ben !== usuario?.reg_usu) {
       throw new AppError("No tiene acceso a este beneficiario", 403);
     }
 
@@ -159,7 +159,7 @@ export const beneficiarioService = {
     }
 
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    if (!puedeVerTodos && beneficiario.com_ben !== usuario?.com_usu) {
+    if (!puedeVerTodos && beneficiario.reg_ben !== usuario?.reg_usu) {
       throw new AppError("No tiene acceso a este beneficiario", 403);
     }
 

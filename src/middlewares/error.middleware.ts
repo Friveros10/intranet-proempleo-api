@@ -26,6 +26,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   }
 
   logger.error({ err }, 'Error no controlado');
-  console.log('[errorHandler] error no controlado:', err);
+  // console.log('[errorHandler] error no controlado:', err);
   res.status(500).json({ message: 'Error interno del servidor' });
 }

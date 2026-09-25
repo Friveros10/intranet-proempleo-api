@@ -119,15 +119,15 @@ function fechaIsoLiteral(fechaIso: string) {
 
 function buildBeneficiarioWhere(
   filtros: ListarBeneficiariosQuery,
-  comunaUsuario?: number | null,
+  regionUsuario?: number | null,
 ) {
   const and: Record<string, unknown>[] = [
     { statusFicha: { [Op.gt]: 0 } },
     { status: { [Op.gt]: 0 } },
   ];
 
-  if (comunaUsuario) {
-    and.push({ com_ben: comunaUsuario });
+  if (regionUsuario) {
+    and.push({ reg_ben: regionUsuario });
   } else {
     if (filtros.region) {
       and.push({ reg_ben: filtros.region });
@@ -212,13 +212,12 @@ export const beneficiarioRepository = {
 
   async findAllListado(
     filtros: ListarBeneficiariosQuery,
-    comunaUsuario?: number | null,
+    regionUsuario?: number | null,
   ): Promise<BeneficiarioListadoPaginado> {
-    const where = buildBeneficiarioWhere(filtros, comunaUsuario);
+    const where = buildBeneficiarioWhere(filtros, regionUsuario);
     const page = filtros.page;
     const limit = 50;
     const offset = (page - 1) * limit;
-
     const { count, rows } = await BeneficiarioModel.findAndCountAll({
       where,
       attributes: ATRIBUTOS_LISTADO,
@@ -349,11 +348,11 @@ export const beneficiarioRepository = {
     fec_cre: Date;
     statusFicha: number;
   }): Promise<BeneficiarioModel> {
-    console.log("[beneficiarioRepository.create] data recibida:", data);
+    // console.log("[beneficiarioRepository.create] data recibida:", data);
     // fecnac_ben llega como "DD-MM-YYYY"; se convierte a "YYYY-MM-DD" antes de armar el literal.
     const [dia, mes, anio] = data.fecnac_ben.split("-").map(Number);
     const fecnac_ben = `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-    console.log("[beneficiarioRepository.create] fecnac_ben parseada:", fecnac_ben);
+    // console.log("[beneficiarioRepository.create] fecnac_ben parseada:", fecnac_ben);
 
     try {
       const creado = await BeneficiarioModel.create({
@@ -370,10 +369,10 @@ export const beneficiarioRepository = {
         status: 1,
         statusFicha: data.statusFicha,
       });
-      console.log("[beneficiarioRepository.create] beneficiario creado:", creado.toJSON());
+      // console.log("[beneficiarioRepository.create] beneficiario creado:", creado.toJSON());
       return creado;
     } catch (error) {
-      console.log("[beneficiarioRepository.create] error al crear beneficiario:", error);
+      // console.log("[beneficiarioRepository.create] error al crear beneficiario:", error);
       throw error;
     }
   },
@@ -381,9 +380,9 @@ export const beneficiarioRepository = {
   async createCompleto(
     data: CrearBeneficiarioInput & { rut_ben: number; dig_ben: string },
   ): Promise<BeneficiarioModel> {
-    console.log("[beneficiarioRepository.createCompleto] data recibida:", data);
+    // console.log("[beneficiarioRepository.createCompleto] data recibida:", data);
     // fechaNacimiento llega como "YYYY-MM-DD" (formato ISO).
-    console.log("[beneficiarioRepository.createCompleto] fecnac_ben:", data.fechaNacimiento);
+    // console.log("[beneficiarioRepository.createCompleto] fecnac_ben:", data.fechaNacimiento);
 
     try {
       const creado = await BeneficiarioModel.create({
@@ -406,7 +405,7 @@ export const beneficiarioRepository = {
         status: 1,
         statusFicha: 2,
       });
-      console.log("[beneficiarioRepository.createCompleto] beneficiario creado:", creado.toJSON());
+      // console.log("[beneficiarioRepository.createCompleto] beneficiario creado:", creado.toJSON());
       return creado;
     } catch (error) {
       console.log("[beneficiarioRepository.createCompleto] error al crear beneficiario:", error);
