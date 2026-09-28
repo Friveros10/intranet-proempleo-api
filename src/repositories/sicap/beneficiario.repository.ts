@@ -92,14 +92,16 @@ export interface BeneficiarioListadoPaginado {
 }
 
 type BenProConProyecto = BenProModel & {
-  proyecto?: (ProyectoModel & {
-    region?: {
-      Nom_region?: string | null;
-    } | null;
-    ciudad?: {
-      nom_ciu?: string | null;
-    } | null;
-  }) | null;
+  proyecto?:
+    | (ProyectoModel & {
+        region?: {
+          Nom_region?: string | null;
+        } | null;
+        ciudad?: {
+          nom_ciu?: string | null;
+        } | null;
+      })
+    | null;
 };
 
 function formatearMesAno(ano: number, mes: number): string {
@@ -144,9 +146,12 @@ function buildBeneficiarioWhere(
     const termino = `%${filtros.search}%`;
     and.push({
       [Op.or]: [
-        sequelize.where(sequelize.cast(sequelize.col("rut_ben"), "VARCHAR(20)"), {
-          [Op.like]: termino,
-        }),
+        sequelize.where(
+          sequelize.cast(sequelize.col("rut_ben"), "VARCHAR(20)"),
+          {
+            [Op.like]: termino,
+          },
+        ),
         { nom_ben: { [Op.like]: termino } },
         { pat_ben: { [Op.like]: termino } },
         { mat_ben: { [Op.like]: termino } },
@@ -170,7 +175,12 @@ const ATRIBUTOS_LISTADO: any[] = [
   "ciu_ben",
   "com_ben",
   [
-    sequelize.fn("CONVERT", sequelize.literal("VARCHAR(10)"), sequelize.col("fecnac_ben"), 23),
+    sequelize.fn(
+      "CONVERT",
+      sequelize.literal("VARCHAR(10)"),
+      sequelize.col("fecnac_ben"),
+      23,
+    ),
     "fecnac_ben",
   ],
   "sex_ben",
@@ -185,7 +195,13 @@ const ATRIBUTOS_LISTADO: any[] = [
 
 const INCLUDES_LISTADO = [
   { model: RegionModel, as: "region", attributes: [], required: false },
-  { model: CiudadModel, as: "ciudad", attributes: [], required: false },
+  {
+    model: CiudadModel,
+    as: "ciudad",
+    attributes: [],
+    required: false,
+    where: { estado: "ACTIVO" },
+  },
   { model: ComunaModel, as: "comuna", attributes: [], required: false },
 ];
 
@@ -294,23 +310,32 @@ export const beneficiarioRepository = {
 
       const actual = porProyecto.get(fol_pro) ?? valorActual;
       const fechaInicio = actual.mes_inicio
-        ? Number(actual.mes_inicio.split("-")[1]) * 12 + Number(actual.mes_inicio.split("-")[0])
+        ? Number(actual.mes_inicio.split("-")[1]) * 12 +
+          Number(actual.mes_inicio.split("-")[0])
         : Number.POSITIVE_INFINITY;
       const fechaTermino = actual.mes_termino
-        ? Number(actual.mes_termino.split("-")[1]) * 12 + Number(actual.mes_termino.split("-")[0])
+        ? Number(actual.mes_termino.split("-")[1]) * 12 +
+          Number(actual.mes_termino.split("-")[0])
         : Number.NEGATIVE_INFINITY;
 
       if (fechaActual < fechaInicio) {
-        actual.mes_inicio = formatearMesAno(benPro.ano_BenPro, benPro.mes_benpro);
+        actual.mes_inicio = formatearMesAno(
+          benPro.ano_BenPro,
+          benPro.mes_benpro,
+        );
       }
       if (fechaActual > fechaTermino) {
-        actual.mes_termino = formatearMesAno(benPro.ano_BenPro, benPro.mes_benpro);
+        actual.mes_termino = formatearMesAno(
+          benPro.ano_BenPro,
+          benPro.mes_benpro,
+        );
       }
 
       actual.ano_BenPro = benPro.ano_BenPro;
       actual.est_benpro = benPro.est_benpro ?? actual.est_benpro;
       actual.nom_pro = proyecto?.nom_pro ?? actual.nom_pro;
-      actual.nombre_region = proyecto?.region?.Nom_region ?? actual.nombre_region;
+      actual.nombre_region =
+        proyecto?.region?.Nom_region ?? actual.nombre_region;
       actual.nombre_ciudad = proyecto?.ciudad?.nom_ciu ?? actual.nombre_ciudad;
 
       porProyecto.set(fol_pro, {
@@ -408,14 +433,21 @@ export const beneficiarioRepository = {
       // console.log("[beneficiarioRepository.createCompleto] beneficiario creado:", creado.toJSON());
       return creado;
     } catch (error) {
-      console.log("[beneficiarioRepository.createCompleto] error al crear beneficiario:", error);
+      console.log(
+        "[beneficiarioRepository.createCompleto] error al crear beneficiario:",
+        error,
+      );
       throw error;
     }
   },
 
   async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
     const [affected] = await BeneficiarioModel.update(
-      { status: -1, usu_eli, fec_eli: sequelize.fn("GETDATE") as unknown as Date },
+      {
+        status: -1,
+        usu_eli,
+        fec_eli: sequelize.fn("GETDATE") as unknown as Date,
+      },
       { where: { rut_ben, status: { [Op.gt]: 0 } } },
     );
     return affected ?? 0;
@@ -459,7 +491,10 @@ export const beneficiarioRepository = {
   async listarCiudades(cod_reg?: number): Promise<CatalogoCiudadRow[]> {
     const ciudades = await CiudadModel.findAll({
       attributes: ["cod_ciu", "cod_reg", "nom_ciu"],
-      where: cod_reg ? { cod_reg } : undefined,
+      where: {
+        ...(cod_reg ? { cod_reg } : {}),
+        estado: "ACTIVO",
+      },
       order: [["nom_ciu", "ASC"]],
       raw: true,
     });

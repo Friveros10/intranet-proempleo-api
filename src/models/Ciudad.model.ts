@@ -7,6 +7,7 @@ export interface Ciudad {
   nom_ciu: string | null;
   est_ciu: string | null;
   cap_ciu: string | null;
+  estado: string | null;
 }
 
 type CiudadCreation = Optional<Ciudad, 'cod_ciu'>;
@@ -17,6 +18,7 @@ export class CiudadModel extends Model<Ciudad, CiudadCreation> implements Ciudad
   declare nom_ciu: string | null;
   declare est_ciu: string | null;
   declare cap_ciu: string | null;
+  declare estado: string | null;
 }
 
 CiudadModel.init(
@@ -25,6 +27,7 @@ CiudadModel.init(
     cod_reg: DataTypes.INTEGER,
     nom_ciu: DataTypes.STRING,
     est_ciu: DataTypes.STRING,
+    estado: DataTypes.STRING,
     cap_ciu: DataTypes.STRING,
   },
   { sequelize, tableName: 'CIUDADES', schema: 'dbo', timestamps: false }
