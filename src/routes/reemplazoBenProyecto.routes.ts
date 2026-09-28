@@ -7,8 +7,10 @@ import { uploadDocumentosReemplazoEnMemoria } from "../middlewares/upload.middle
 import {
   crearReemplazoSchema,
   actualizarEstadoReemplazoSchema,
+  actualizarChecklistReemplazoSchema,
   listarReemplazoSchema,
 } from "../validations/reemplazoBenProyecto.validation";
+import { ROLES_CHECKLIST_REEMPLAZO } from "../constants/checklist.constants";
 import { asyncHandler } from "../utils/asyncHandler";
 
 const router = Router();
@@ -43,6 +45,12 @@ router.patch(
   requirePermisos("REM_APROB", "REM_RECHAZ"),
   validate(actualizarEstadoReemplazoSchema),
   asyncHandler(reemplazoBenProyectoController.actualizarEstado),
+);
+router.patch(
+  "/checklist",
+  requireRoles(...ROLES_CHECKLIST_REEMPLAZO),
+  validate(actualizarChecklistReemplazoSchema),
+  asyncHandler(reemplazoBenProyectoController.actualizarChecklist),
 );
 router.delete(
   "/:id",

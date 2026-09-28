@@ -1,4 +1,4 @@
-import { Op, WhereOptions } from 'sequelize';
+import { Op, Transaction, WhereOptions } from 'sequelize';
 import { ReemplazoBenProyectoModel, ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 import { BeneficiarioModel } from '../models/Beneficiario.model';
@@ -91,6 +91,35 @@ export const reemplazoBenProyectoRepository = {
     reemplazo.fechaAprobacionReemplazo = new Date().toISOString();
     await reemplazo.save();
     return reemplazo;
+  },
+
+  async findByIds(ids: number[]): Promise<ReemplazoBenProyectoModel[]> {
+    return ReemplazoBenProyectoModel.findAll({
+      where: { id: { [Op.in]: ids } },
+      include: [
+        { model: BeneficiarioModel, as: 'beneficiarioActual' },
+        { model: BeneficiarioModel, as: 'beneficiarioNuevo' },
+        { model: ProyectoModel, as: 'proyecto' },
+        { model: UsuarioSicapModel, as: 'usuarioSolicitante' },
+      ],
+      order: [['id', 'ASC']],
+    });
+  },
+
+  async actualizarChecklist(
+    id: number,
+    data: {
+      criterio_1: number;
+      criterio_2: number;
+      criterio_3: number;
+      criterio_4: number;
+      criterio_5: number;
+      ponderacion: number;
+    },
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const [filasActualizadas] = await ReemplazoBenProyectoModel.update(data, { where: { id }, transaction });
+    return filasActualizadas > 0;
   },
 
   async eliminar(id: number): Promise<boolean> {

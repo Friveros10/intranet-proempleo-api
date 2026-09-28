@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { sequelize } from '../database/sequelize';
 import { reemplazoBenProyectoRepository, ReemplazoFiltros } from '../repositories/reemplazoBenProyecto.repository';
 import { docReemplazoBenProyectoRepository } from '../repositories/docReemplazoBenProyecto.repository';
 import { auditLogRepository } from '../repositories/auditLog.repository';
@@ -11,8 +12,9 @@ import { AppError } from '../utils/AppError';
 import { parseRut } from '../utils/rut';
 import { DOCUMENTOS_REEMPLAZO, esDocumentoReemplazoValido } from '../constants/documentosReemplazo';
 import { guardarDocumentoEnDisco } from '../middlewares/upload.middleware';
-import { CrearReemplazoInput } from '../validations/reemplazoBenProyecto.validation';
-import { ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
+import { CrearReemplazoInput, ActualizarChecklistReemplazoInput } from '../validations/reemplazoBenProyecto.validation';
+import { ReemplazoBenProyectoModel, ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
+import { CAMPOS_CHECKLIST_REEMPLAZO, puedeGestionarChecklist } from '../constants/checklist.constants';
 
 const PERMISO_VER_TODAS_REGIONES = 'REM_VERALL';
 const PERMISO_APROBAR = 'REM_APROB';
@@ -37,20 +39,29 @@ async function obtenerContextoUsuario(rutUsuario: number): Promise<ContextoUsuar
   };
 }
 
+function aplicarVisibilidadChecklist(reemplazo: ReemplazoBenProyectoModel, rolesUsuario: string[]) {
+  const data = reemplazo.toJSON() as unknown as Record<string, unknown>;
+  if (!puedeGestionarChecklist(rolesUsuario)) {
+    for (const campo of CAMPOS_CHECKLIST_REEMPLAZO) delete data[campo];
+  }
+  return data;
+}
+
 export const reemplazoBenProyectoService = {
   // Un usuario sin permiso "ver todas las regiones" (ej. INTENDENCIA) solo ve los
   // reemplazos de proyectos de su propia región, sin importar lo que pida por query.
-  async listar(filtros: ReemplazoFiltros, rutUsuario: number) {
+  async listar(filtros: ReemplazoFiltros, rutUsuario: number, rolesUsuario: string[] = []) {
     const contexto = await obtenerContextoUsuario(rutUsuario);
     const region = contexto.puedeVerTodasLasRegiones ? filtros.region : contexto.regionUsuario ?? -1;
-    return reemplazoBenProyectoRepository.findAll({ ...filtros, region: region ?? undefined });
+    const reemplazos = await reemplazoBenProyectoRepository.findAll({ ...filtros, region: region ?? undefined });
+    return reemplazos.map((reemplazo) => aplicarVisibilidadChecklist(reemplazo, rolesUsuario));
   },
 
   async listarRegiones() {
     return regionRepository.findAll();
   },
 
-  async obtenerPorId(id: number, rutUsuario: number) {
+  async obtenerPorId(id: number, rutUsuario: number, rolesUsuario: string[] = []) {
     const reemplazo = await reemplazoBenProyectoRepository.findById(id);
     if (!reemplazo) {
       throw new AppError('Reemplazo no encontrado', 404);
@@ -61,7 +72,7 @@ export const reemplazoBenProyectoService = {
       throw new AppError('No tiene acceso a este registro', 403);
     }
 
-    return reemplazo;
+    return aplicarVisibilidadChecklist(reemplazo, rolesUsuario);
   },
 
   // Crea la solicitud, el beneficiario nuevo (si no existe) y los documentos, todo junto
@@ -199,6 +210,50 @@ export const reemplazoBenProyectoService = {
       req,
     });
     return actualizado;
+  },
+
+  async actualizarChecklist(data: ActualizarChecklistReemplazoInput, rutUsuario: number, req: Request) {
+    const ids = data.candidatos.map((candidato) => candidato.id);
+    const reemplazos = await reemplazoBenProyectoRepository.findByIds(ids);
+    if (reemplazos.length !== ids.length) {
+      throw new AppError('Uno o más candidatos no existen', 404);
+    }
+    const cupos = new Set(reemplazos.map((r) => `${r.idProyecto}::${r.idBeneficiarioProyecto}`));
+    if (cupos.size !== 1) {
+      throw new AppError('Todos los candidatos deben pertenecer al mismo reemplazo', 400);
+    }
+
+    // La ponderación se recalcula en el servidor; no se confía en el valor del cliente.
+    const evaluaciones = data.candidatos.map(({ id, ...criterios }) => ({
+      id,
+      criterios: {
+        ...criterios,
+        ponderacion:
+          criterios.criterio_1 + criterios.criterio_2 + criterios.criterio_3 + criterios.criterio_4 + criterios.criterio_5,
+      },
+    }));
+
+    await sequelize.transaction(async (transaction) => {
+      for (const evaluacion of evaluaciones) {
+        await reemplazoBenProyectoRepository.actualizarChecklist(evaluacion.id, evaluacion.criterios, transaction);
+      }
+    });
+
+    const region = reemplazos[0].proyecto?.reg_pro ?? null;
+    for (const evaluacion of evaluaciones) {
+      await auditLogRepository.registrar({
+        usuarioId: rutUsuario,
+        accion: 'REEMPLAZO_CHECKLIST_ACTUALIZADO',
+        modulo: 'REEMPLAZOS',
+        entidad: 'Reemplazo_benpro',
+        registroId: String(evaluacion.id),
+        region,
+        detalle: `Checklist actualizado con ponderación ${evaluacion.criterios.ponderacion}`,
+        req,
+      });
+    }
+
+    return reemplazoBenProyectoRepository.findByIds(ids);
   },
 
   async eliminar(id: number, rutUsuario: number, req: Request) {

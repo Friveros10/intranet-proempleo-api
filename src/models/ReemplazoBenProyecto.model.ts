@@ -14,9 +14,32 @@ export interface ReemplazoBenProyecto {
   comentarioRechazo: string | null;
   fechaSolicitudReemplazo: string;
   fechaAprobacionReemplazo: string | null;
+  criterio_1: number | null;
+  criterio_2: number | null;
+  criterio_3: number | null;
+  criterio_4: number | null;
+  criterio_5: number | null;
+  ponderacion: number | null;
 }
 
-type ReemplazoCreation = Optional<ReemplazoBenProyecto, 'id' | 'fechaAprobacionReemplazo'>;
+type ReemplazoCreation = Optional<
+  ReemplazoBenProyecto,
+  | 'id'
+  | 'fechaAprobacionReemplazo'
+  | 'comentarioRechazo'
+  | 'criterio_1'
+  | 'criterio_2'
+  | 'criterio_3'
+  | 'criterio_4'
+  | 'criterio_5'
+  | 'ponderacion'
+>;
+
+const criterioAttribute = {
+  type: DataTypes.INTEGER,
+  allowNull: true,
+  validate: { isInt: true, min: 0, max: 10 },
+};
 
 export class ReemplazoBenProyectoModel
   extends Model<ReemplazoBenProyecto, ReemplazoCreation>
@@ -31,6 +54,12 @@ export class ReemplazoBenProyectoModel
   declare comentarioRechazo: string | null;
   declare fechaSolicitudReemplazo: string;
   declare fechaAprobacionReemplazo: string | null;
+  declare criterio_1: number | null;
+  declare criterio_2: number | null;
+  declare criterio_3: number | null;
+  declare criterio_4: number | null;
+  declare criterio_5: number | null;
+  declare ponderacion: number | null;
   // Asociación cargada solo cuando se hace include: [{ model: ProyectoModel, as: 'proyecto' }]
   declare proyecto?: ProyectoModel;
 }
@@ -51,6 +80,12 @@ ReemplazoBenProyectoModel.init(
     comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaSolicitudReemplazo: { type: DataTypes.DATE, allowNull: false },
     fechaAprobacionReemplazo: { type: DataTypes.DATE, allowNull: true },
+    criterio_1: criterioAttribute,
+    criterio_2: criterioAttribute,
+    criterio_3: criterioAttribute,
+    criterio_4: criterioAttribute,
+    criterio_5: criterioAttribute,
+    ponderacion: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
   },
   { sequelize, tableName: 'Reemplazo_benpro', schema: 'dbo', timestamps: false }
 );

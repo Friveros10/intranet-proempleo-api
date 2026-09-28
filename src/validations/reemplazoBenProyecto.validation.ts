@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CRITERIO_VALOR_MAX, CRITERIO_VALOR_MIN } from '../constants/checklist.constants';
 
 const nuevoBeneficiarioSchema = z.object({
   rut: z.string({ required_error: 'El RUT del nuevo beneficiario es requerido' }).min(2),
@@ -59,6 +60,32 @@ export const actualizarEstadoReemplazoSchema = z.object({
   }),
 });
 
+const criterioSchema = z
+  .number({ required_error: 'El criterio es requerido', invalid_type_error: 'El criterio debe ser numérico' })
+  .int('El criterio debe ser un número entero')
+  .min(CRITERIO_VALOR_MIN, `El criterio debe ser mayor o igual a ${CRITERIO_VALOR_MIN}`)
+  .max(CRITERIO_VALOR_MAX, `El criterio debe ser menor o igual a ${CRITERIO_VALOR_MAX}`);
+
+const checklistCandidatoSchema = z.object({
+  id: z.number({ required_error: 'El id del reemplazo es requerido' }).int().positive(),
+  criterio_1: criterioSchema,
+  criterio_2: criterioSchema,
+  criterio_3: criterioSchema,
+  criterio_4: criterioSchema,
+  criterio_5: criterioSchema,
+});
+
+export const actualizarChecklistReemplazoSchema = z.object({
+  body: z.object({
+    candidatos: z
+      .array(checklistCandidatoSchema)
+      .min(1, 'Debe evaluar al menos un candidato')
+      .refine((candidatos) => new Set(candidatos.map((c) => c.id)).size === candidatos.length, {
+        message: 'Los candidatos no pueden repetirse',
+      }),
+  }),
+});
+
 export const listarReemplazoSchema = z.object({
   query: z.object({
     region: z.coerce.number().int().optional(),
@@ -72,3 +99,4 @@ export type ListarReemplazoQuery = z.infer<typeof listarReemplazoSchema>['query'
 
 export type CrearReemplazoInput = z.infer<typeof crearReemplazoSchema>['body'];
 export type ActualizarEstadoReemplazoInput = z.infer<typeof actualizarEstadoReemplazoSchema>['body'];
+export type ActualizarChecklistReemplazoInput = z.infer<typeof actualizarChecklistReemplazoSchema>['body'];

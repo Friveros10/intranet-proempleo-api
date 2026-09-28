@@ -11,7 +11,8 @@ export const reemplazoBenProyectoController = {
     const { region, fechaDesde, fechaHasta, status } = req.query as unknown as ListarReemplazoQuery;
     const reemplazos = await reemplazoBenProyectoService.listar(
       { region, fechaDesde, fechaHasta, status },
-      Number(req.user.sub)
+      Number(req.user.sub),
+      req.user.roles,
     );
     res.status(200).json(reemplazos);
   },
@@ -25,7 +26,11 @@ export const reemplazoBenProyectoController = {
     if (!req.user) {
       throw new AppError('No autenticado', 401);
     }
-    const reemplazo = await reemplazoBenProyectoService.obtenerPorId(Number(req.params.id), Number(req.user.sub));
+    const reemplazo = await reemplazoBenProyectoService.obtenerPorId(
+      Number(req.params.id),
+      Number(req.user.sub),
+      req.user.roles,
+    );
     res.status(200).json(reemplazo);
   },
 
@@ -50,6 +55,18 @@ export const reemplazoBenProyectoController = {
       req.body.comentarioRechazo ?? null,
     );
     res.status(200).json(reemplazo);
+  },
+
+  async actualizarChecklist(req: Request, res: Response): Promise<void> {
+    if (!req.user) {
+      throw new AppError('No autenticado', 401);
+    }
+    const reemplazos = await reemplazoBenProyectoService.actualizarChecklist(
+      req.body,
+      Number(req.user.sub),
+      req,
+    );
+    res.status(200).json(reemplazos);
   },
 
   async eliminar(req: Request, res: Response): Promise<void> {
