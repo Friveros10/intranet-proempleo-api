@@ -43,7 +43,7 @@ export const crearReemplazoSchema = z.object({
 
 export const actualizarEstadoReemplazoSchema = z.object({
   body: z.object({
-    status: z.enum(['aprobado', 'rechazado'], { required_error: 'status es requerido' }),
+    status: z.enum(['aprobado', 'rechazado', 'enRevision', 'revisado'], { required_error: 'status es requerido' }),
     comentarioRechazo: z
       .string()
       .trim()
@@ -91,7 +91,7 @@ export const listarReemplazoSchema = z.object({
     region: z.coerce.number().int().optional(),
     fechaDesde: z.string().min(1).optional(),
     fechaHasta: z.string().min(1).optional(),
-    status: z.enum(['pendiente', 'aprobado', 'rechazado']).optional(),
+    status: z.enum(['pendiente', 'aprobado', 'rechazado', 'enRevision', 'revisado']).optional(),
   }),
 });
 

@@ -2,7 +2,7 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 import { ProyectoModel } from './Proyecto.model';
 
-export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado';
+export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'enRevision' | 'revisado';
 
 export interface ReemplazoBenProyecto {
   id: number;
@@ -75,7 +75,7 @@ ReemplazoBenProyectoModel.init(
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: 'pendiente',
-      validate: { isIn: [['pendiente', 'aprobado', 'rechazado']] },
+      validate: { isIn: [['pendiente', 'aprobado', 'rechazado', 'enRevision', 'revisado']] },
     },
     comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaSolicitudReemplazo: { type: DataTypes.DATE, allowNull: false },
