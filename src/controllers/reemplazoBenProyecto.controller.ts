@@ -1,14 +1,15 @@
-import { Request, Response } from 'express';
-import { reemplazoBenProyectoService } from '../services/reemplazoBenProyecto.service';
-import { AppError } from '../utils/AppError';
-import { ListarReemplazoQuery } from '../validations/reemplazoBenProyecto.validation';
+import { Request, Response } from "express";
+import { reemplazoBenProyectoService } from "../services/reemplazoBenProyecto.service";
+import { AppError } from "../utils/AppError";
+import { ListarReemplazoQuery } from "../validations/reemplazoBenProyecto.validation";
 
 export const reemplazoBenProyectoController = {
   async listar(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
     }
-    const { region, fechaDesde, fechaHasta, status } = req.query as unknown as ListarReemplazoQuery;
+    const { region, fechaDesde, fechaHasta, status } =
+      req.query as unknown as ListarReemplazoQuery;
     const reemplazos = await reemplazoBenProyectoService.listar(
       { region, fechaDesde, fechaHasta, status },
       Number(req.user.sub),
@@ -24,7 +25,7 @@ export const reemplazoBenProyectoController = {
 
   async obtener(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
     }
     const reemplazo = await reemplazoBenProyectoService.obtenerPorId(
       Number(req.params.id),
@@ -36,16 +37,41 @@ export const reemplazoBenProyectoController = {
 
   async crear(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
+    }
+    const hoy = new Date();
+    const diaActual = hoy.getDate();
+    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    //si periodoHabilitado es true o el usuario es ADMIN, se permite crear reemplazo
+    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
+      throw new AppError(
+        "No se puede crear reemplazo fuera del periodo habilitado",
+        403,
+      );
     }
     const archivos = (req.files as Express.Multer.File[]) ?? [];
-    const reemplazo = await reemplazoBenProyectoService.crear(req.body, archivos, Number(req.user.sub), req);
+    const reemplazo = await reemplazoBenProyectoService.crear(
+      req.body,
+      archivos,
+      Number(req.user.sub),
+      req,
+    );
     res.status(201).json(reemplazo);
   },
 
   async actualizarEstado(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
+    }
+    const hoy = new Date();
+    const diaActual = hoy.getDate();
+    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar estado
+    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
+      throw new AppError(
+        "No se puede actualizar el estado fuera del periodo habilitado",
+        403,
+      );
     }
     const reemplazo = await reemplazoBenProyectoService.actualizarEstado(
       Number(req.params.id),
@@ -59,7 +85,17 @@ export const reemplazoBenProyectoController = {
 
   async actualizarChecklist(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
+    }
+    const hoy = new Date();
+    const diaActual = hoy.getDate();
+    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar checklist
+    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
+      throw new AppError(
+        "No se puede actualizar el checklist fuera del periodo habilitado",
+        403,
+      );
     }
     const reemplazos = await reemplazoBenProyectoService.actualizarChecklist(
       req.body,
@@ -71,9 +107,14 @@ export const reemplazoBenProyectoController = {
 
   async eliminar(req: Request, res: Response): Promise<void> {
     if (!req.user) {
-      throw new AppError('No autenticado', 401);
+      throw new AppError("No autenticado", 401);
     }
-    await reemplazoBenProyectoService.eliminar(Number(req.params.id), Number(req.user.sub), req);
+    await reemplazoBenProyectoService.eliminar(
+      Number(req.params.id),
+      Number(req.user.sub),
+      req,
+    );
     res.status(204).send();
   },
+  
 };
