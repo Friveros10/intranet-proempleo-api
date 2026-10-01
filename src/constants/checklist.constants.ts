@@ -7,7 +7,7 @@ export const CRITERIOS_REEMPLAZO = [
 ] as const;
 
 export const CRITERIO_VALOR_MIN = 0;
-export const CRITERIO_VALOR_MAX = 10;
+export const CRITERIO_VALOR_MAX = 100;
 
 export const CAMPOS_CHECKLIST_REEMPLAZO = [
   'criterio_1',

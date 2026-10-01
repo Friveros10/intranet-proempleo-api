@@ -1,6 +1,10 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 import { ProyectoModel } from './Proyecto.model';
+import {
+  CRITERIO_VALOR_MAX,
+  CRITERIO_VALOR_MIN,
+} from '../constants/checklist.constants';
 
 export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'enRevision' | 'revisado';
 
@@ -35,11 +39,17 @@ type ReemplazoCreation = Optional<
   | 'ponderacion'
 >;
 
-const criterioAttribute = {
-  type: DataTypes.INTEGER,
-  allowNull: true,
-  validate: { isInt: true, min: 0, max: 10 },
-};
+function crearCriterioAttribute() {
+  return {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    validate: {
+      isInt: true,
+      min: CRITERIO_VALOR_MIN,
+      max: CRITERIO_VALOR_MAX,
+    },
+  };
+}
 
 export class ReemplazoBenProyectoModel
   extends Model<ReemplazoBenProyecto, ReemplazoCreation>
@@ -80,11 +90,11 @@ ReemplazoBenProyectoModel.init(
     comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaSolicitudReemplazo: { type: DataTypes.DATE, allowNull: false },
     fechaAprobacionReemplazo: { type: DataTypes.DATE, allowNull: true },
-    criterio_1: criterioAttribute,
-    criterio_2: criterioAttribute,
-    criterio_3: criterioAttribute,
-    criterio_4: criterioAttribute,
-    criterio_5: criterioAttribute,
+    criterio_1: crearCriterioAttribute(),
+    criterio_2: crearCriterioAttribute(),
+    criterio_3: crearCriterioAttribute(),
+    criterio_4: crearCriterioAttribute(),
+    criterio_5: crearCriterioAttribute(),
     ponderacion: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
   },
   { sequelize, tableName: 'Reemplazo_benpro', schema: 'dbo', timestamps: false }
