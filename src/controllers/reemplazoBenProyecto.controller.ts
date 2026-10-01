@@ -41,11 +41,11 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 30;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite crear reemplazo
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
-        "No se puede crear reemplazo fuera del periodo habilitado",
+        "No se puede crear Reemplazo de Cupo fuera del periodo habilitado",
         403,
       );
     }
@@ -56,7 +56,9 @@ export const reemplazoBenProyectoController = {
       Number(req.user.sub),
       req,
     );
-    res.status(201).json(reemplazo);
+    res
+      .status(201)
+      .json({ message: "Solicitud de reemplazo creada correctamente", data: reemplazo });
   },
 
   async actualizarEstado(req: Request, res: Response): Promise<void> {
@@ -65,7 +67,7 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 30;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar estado
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
@@ -80,7 +82,16 @@ export const reemplazoBenProyectoController = {
       req,
       req.body.comentarioRechazo ?? null,
     );
-    res.status(200).json(reemplazo);
+    const mensajesEstado: Record<string, string> = {
+      aprobado: "Solicitud aprobada correctamente",
+      rechazado: "Solicitud rechazada correctamente",
+      revisado: "Solicitud marcada como revisada",
+      enRevision: "Solicitud puesta en revisión",
+    };
+    res.status(200).json({
+      message: mensajesEstado[req.body.status] ?? "Solicitud actualizada correctamente",
+      data: reemplazo,
+    });
   },
 
   async actualizarChecklist(req: Request, res: Response): Promise<void> {
@@ -89,7 +100,7 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 23 && diaActual <= 27;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 30;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar checklist
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
@@ -102,7 +113,9 @@ export const reemplazoBenProyectoController = {
       Number(req.user.sub),
       req,
     );
-    res.status(200).json(reemplazos);
+    res
+      .status(200)
+      .json({ message: "Checklist guardado correctamente", data: reemplazos });
   },
 
   async eliminar(req: Request, res: Response): Promise<void> {
@@ -114,7 +127,6 @@ export const reemplazoBenProyectoController = {
       Number(req.user.sub),
       req,
     );
-    res.status(204).send();
+    res.status(200).json({ message: "Solicitud eliminada correctamente" });
   },
-  
 };

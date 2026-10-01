@@ -104,8 +104,8 @@ export const docReemplazoBenProyectoService = {
       region: reemplazo?.proyecto?.reg_pro ?? null,
       detalle:
         status === "rechazado" && comentarioRechazo
-          ? comentarioRechazo
-          : `Documento ${status}`,
+          ? `Documento ${status} en reemplazo para proyecto ${reemplazo?.proyecto?.fol_pro}: ` + comentarioRechazo
+          : `Documento ${status} en reemplazo para proyecto ${reemplazo?.proyecto?.fol_pro}`,
       req,
     });
     return actualizado;

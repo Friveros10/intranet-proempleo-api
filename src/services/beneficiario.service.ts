@@ -96,7 +96,10 @@ export const beneficiarioService = {
       throw new AppError("Beneficiario no encontrado", 404);
     }
 
-    const afectados = await beneficiarioRepository.eliminar(rut, String(rutUsuario));
+    const afectados = await beneficiarioRepository.eliminar(
+      rut,
+      String(rutUsuario),
+    );
     if (afectados === 0) {
       throw new AppError("El beneficiario ya se encuentra eliminado", 409);
     }
@@ -209,10 +212,6 @@ export const beneficiarioService = {
     if (!puedeVerTodasLasRegiones && ficha.reg_ben !== usuario?.reg_usu) {
       throw new AppError("El beneficiario no pertenece a tu zona", 404);
     }
-
-    // if (ficha.tiene_reemplazo > 0) {
-    //   throw new AppError("El beneficiario tiene un reemplazo en curso", 404);
-    // }
 
     const proyecto = await proyectoRepository.findByFolio(ficha.folio_vigente);
     if (!proyecto) {

@@ -44,7 +44,11 @@ export const docReemplazoBenProyectoController = {
       Number(req.user!.sub),
       req,
     );
-    res.status(200).json(doc);
+    const mensaje =
+      req.body.status === 'aprobado'
+        ? 'Documento aprobado correctamente'
+        : 'Documento rechazado correctamente';
+    res.status(200).json({ message: mensaje, data: doc });
   },
 
   async reemplazarArchivo(req: Request, res: Response): Promise<void> {
