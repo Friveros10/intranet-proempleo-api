@@ -6,6 +6,7 @@ export interface Region {
   Glo_region: string | null;
   Nom_region: string | null;
   est_region: string | null;
+  activa: number;
 }
 
 type RegionCreation = Optional<Region, 'cod_region'>;
@@ -15,6 +16,7 @@ export class RegionModel extends Model<Region, RegionCreation> implements Region
   declare Glo_region: string | null;
   declare Nom_region: string | null;
   declare est_region: string | null;
+  declare activa: number;
 }
 
 RegionModel.init(
@@ -23,6 +25,7 @@ RegionModel.init(
     Glo_region: DataTypes.STRING,
     Nom_region: DataTypes.STRING,
     est_region: DataTypes.STRING,
+    activa: DataTypes.INTEGER,
   },
   { sequelize, tableName: 'REGIONES', schema: 'dbo', timestamps: false }
 );

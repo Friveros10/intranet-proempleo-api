@@ -91,6 +91,18 @@ export const reemplazoBenProyectoService = {
   async listarRegiones() {
     return regionRepository.findAll();
   },
+  async listarRegionesActivas() {
+    return regionRepository.findRegionesActivas();
+  },
+
+  async listarComunas(region: number | undefined, rutUsuario: number) {
+    const contexto = await obtenerContextoUsuario(rutUsuario);
+    const regionEfectiva = contexto.puedeVerTodasLasRegiones
+      ? region
+      : (contexto.regionUsuario ?? -1);
+    if (!regionEfectiva) return [];
+    return regionRepository.findComunasByRegion(regionEfectiva);
+  },
 
   async obtenerPorId(
     id: number,

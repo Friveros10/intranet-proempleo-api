@@ -4,10 +4,12 @@ import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.
 import { BeneficiarioModel } from '../models/Beneficiario.model';
 import { ProyectoModel } from '../models/Proyecto.model';
 import { UsuarioSicapModel } from '../models/UsuarioSicap.model';
+import { ComunaModel } from '../models/Comuna.model';
 import dayjs from 'dayjs';
 
 export interface ReemplazoFiltros {
   region?: number;
+  comuna?: number;
   fechaDesde?: string;
   fechaHasta?: string;
   status?: ReemplazoStatus;
@@ -36,6 +38,11 @@ export const reemplazoBenProyectoRepository = {
       };
     }
 
+    const whereProyecto: WhereOptions = {};
+    if (filtros.region) whereProyecto.reg_pro = filtros.region;
+    if (filtros.comuna) whereProyecto.com_pro = filtros.comuna;
+    const filtraProyecto = Boolean(filtros.region || filtros.comuna);
+
     return ReemplazoBenProyectoModel.findAll({
       where,
       include: [
@@ -44,8 +51,11 @@ export const reemplazoBenProyectoRepository = {
         {
           model: ProyectoModel,
           as: 'proyecto',
-          where: filtros.region ? { reg_pro: filtros.region } : undefined,
-          required: Boolean(filtros.region),
+          where: filtraProyecto ? whereProyecto : undefined,
+          required: filtraProyecto,
+          include: [
+            { model: ComunaModel, as: 'comuna', attributes: ['cod_com', 'nom_com'], required: false },
+          ],
         },
         { model: UsuarioSicapModel, as: 'usuarioSolicitante' },
       ],

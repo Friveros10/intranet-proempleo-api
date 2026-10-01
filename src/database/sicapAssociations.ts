@@ -28,6 +28,7 @@ export function registrarAsociaciones(): void {
   // Proyecto <-> catálogos
   ProyectoModel.belongsTo(RegionModel, { foreignKey: 'reg_pro', targetKey: 'cod_region', as: 'region' });
   ProyectoModel.belongsTo(CiudadModel, { foreignKey: 'ciu_pro', targetKey: 'cod_ciu', as: 'ciudad' });
+  ProyectoModel.belongsTo(ComunaModel, { foreignKey: 'com_pro', targetKey: 'cod_com', as: 'comuna' });
 
   // Beneficiario <-> catálogos
   BeneficiarioModel.belongsTo(RegionModel, { foreignKey: 'reg_ben', targetKey: 'cod_region', as: 'region' });

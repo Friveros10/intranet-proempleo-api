@@ -134,11 +134,18 @@ export const actualizarChecklistReemplazoSchema = z.object({
 export const listarReemplazoSchema = z.object({
   query: z.object({
     region: z.coerce.number().int().optional(),
+    comuna: z.coerce.number().int().optional(),
     fechaDesde: z.string().min(1).optional(),
     fechaHasta: z.string().min(1).optional(),
     status: z
       .enum(["pendiente", "aprobado", "rechazado", "enRevision", "revisado"])
       .optional(),
+  }),
+});
+
+export const listarComunasReemplazoSchema = z.object({
+  query: z.object({
+    region: z.coerce.number().int().optional(),
   }),
 });
 

@@ -9,6 +9,7 @@ import {
   actualizarEstadoReemplazoSchema,
   actualizarChecklistReemplazoSchema,
   listarReemplazoSchema,
+  listarComunasReemplazoSchema,
 } from "../validations/reemplazoBenProyecto.validation";
 import { ROLES_CHECKLIST_REEMPLAZO } from "../constants/checklist.constants";
 import { asyncHandler } from "../utils/asyncHandler";
@@ -21,6 +22,17 @@ router.get(
   "/regiones",
   requirePermisos("REM_VERALL", "REM_VERREG", "REM_CREAR"),
   asyncHandler(reemplazoBenProyectoController.listarRegiones),
+);
+router.get(
+  "/regiones-activas",
+  requirePermisos("REM_VERALL", "REM_VERREG", "REM_CREAR"),
+  asyncHandler(reemplazoBenProyectoController.listarRegionesActivas),
+);
+router.get(
+  "/comunas",
+  requirePermisos("REM_VERALL", "REM_VERREG", "REM_CREAR"),
+  validate(listarComunasReemplazoSchema),
+  asyncHandler(reemplazoBenProyectoController.listarComunas),
 );
 router.get(
   "/",

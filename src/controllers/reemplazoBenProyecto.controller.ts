@@ -8,10 +8,10 @@ export const reemplazoBenProyectoController = {
     if (!req.user) {
       throw new AppError("No autenticado", 401);
     }
-    const { region, fechaDesde, fechaHasta, status } =
+    const { region, comuna, fechaDesde, fechaHasta, status } =
       req.query as unknown as ListarReemplazoQuery;
     const reemplazos = await reemplazoBenProyectoService.listar(
-      { region, fechaDesde, fechaHasta, status },
+      { region, comuna, fechaDesde, fechaHasta, status },
       Number(req.user.sub),
       req.user.roles,
     );
@@ -21,6 +21,22 @@ export const reemplazoBenProyectoController = {
   async listarRegiones(_req: Request, res: Response): Promise<void> {
     const regiones = await reemplazoBenProyectoService.listarRegiones();
     res.status(200).json(regiones);
+  },
+  async listarRegionesActivas(_req: Request, res: Response): Promise<void> {
+    const regiones = await reemplazoBenProyectoService.listarRegionesActivas();
+    res.status(200).json(regiones);
+  },  
+
+  async listarComunas(req: Request, res: Response): Promise<void> {
+    if (!req.user) {
+      throw new AppError("No autenticado", 401);
+    }
+    const region = req.query.region ? Number(req.query.region) : undefined;
+    const comunas = await reemplazoBenProyectoService.listarComunas(
+      region,
+      Number(req.user.sub),
+    );
+    res.status(200).json(comunas);
   },
 
   async obtener(req: Request, res: Response): Promise<void> {
