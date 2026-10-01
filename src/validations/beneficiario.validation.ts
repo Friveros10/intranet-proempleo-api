@@ -30,13 +30,13 @@ export const crearBeneficiarioSchema = z.object({
 
 export const completarFichaBeneficiarioSchema = z.object({
   body: z.object({
-    sexo: z.coerce.number().int().nullable().optional(),
     direccion: z.string().trim().min(1).nullable().optional(),
     region: z.coerce.number({ required_error: 'La región es requerida' }).int(),
     ciudad: z.coerce.number({ required_error: 'La ciudad es requerida' }).int(),
     comuna: z.coerce.number({ required_error: 'La comuna es requerida' }).int(),
     telefono: z.string().trim().nullable().optional(),
     celular: z.string().trim().nullable().optional(),
+    email_ben: z.string().trim().email().nullable().optional(),
   }),
 });
 

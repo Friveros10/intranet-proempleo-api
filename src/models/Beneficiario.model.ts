@@ -18,7 +18,7 @@ export interface Beneficiario {
   car_ben: string | null;
   sex_ben: string | null;
   jefhog_ben: string | null;
-  nivedu_ben: number | null;
+  nivedu_ben: string | null;
   usu_cre: string | null;
   fec_cre: Date | null;
   usu_mod: string | null;
@@ -47,6 +47,7 @@ export interface Beneficiario {
   fm_ben: string | null;
   fs_ben: string | null;
   tel_ben: string | null;
+  email_ben: string | null;
   ano_ben: number | null;
   corr_mar: number | null;
   cod_cel_ben: string | null;
@@ -78,7 +79,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare car_ben: string | null;
   declare sex_ben: string | null;
   declare jefhog_ben: string | null;
-  declare nivedu_ben: number | null;
+  declare nivedu_ben: string | null;
   declare usu_cre: string | null;
   declare fec_cre: Date | null;
   declare usu_mod: string | null;
@@ -107,6 +108,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare fm_ben: string | null;
   declare fs_ben: string | null;
   declare tel_ben: string | null;
+  declare email_ben: string | null;
   declare ano_ben: number | null;
   declare corr_mar: number | null;
   declare cod_cel_ben: string | null;
@@ -137,7 +139,7 @@ BeneficiarioModel.init(
     car_ben: DataTypes.STRING,
     sex_ben: DataTypes.STRING,
     jefhog_ben: DataTypes.STRING,
-    nivedu_ben: DataTypes.INTEGER,
+    nivedu_ben: DataTypes.STRING(255),
     usu_cre: DataTypes.STRING,
     fec_cre: DataTypes.DATE,
     usu_mod: DataTypes.STRING,
@@ -166,6 +168,7 @@ BeneficiarioModel.init(
     fm_ben: DataTypes.STRING,
     fs_ben: DataTypes.STRING,
     tel_ben: DataTypes.STRING,
+    email_ben: DataTypes.STRING,
     ano_ben: DataTypes.INTEGER,
     corr_mar: DataTypes.INTEGER,
     cod_cel_ben: DataTypes.STRING,

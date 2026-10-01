@@ -238,7 +238,7 @@ export const reemplazoBenProyectoService = {
           reg_ben: contexto.regionUsuario ?? null,
           sex_ben: candidato.beneficiario.genero ?? null,
           etn_ben: candidato.beneficiario.etnia ?? null,
-          est_ben: candidato.beneficiario.educacion ?? null,
+          nivedu_ben: candidato.beneficiario.educacion ?? null,
           usu_cre: String(rutUsuarioSolicitante),
           fec_cre: new Date(),
           statusFicha: 1,

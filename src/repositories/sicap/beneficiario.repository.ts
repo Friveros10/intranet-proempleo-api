@@ -52,6 +52,7 @@ export interface BeneficiarioListadoRow {
   sex_ben: string | null;
   tel_ben: string | null;
   cel_ben: string | null;
+  email_ben: string | null;
   status: number;
   statusFicha: number;
 }
@@ -189,6 +190,7 @@ const ATRIBUTOS_LISTADO: any[] = [
   "sex_ben",
   "tel_ben",
   "cel_ben",
+  "email_ben",
   "status",
   "statusFicha",
   [sequelize.col("region.Nom_region"), "nombre_region"],
@@ -374,7 +376,7 @@ export const beneficiarioRepository = {
     fecnac_ben: string;
     sex_ben?: string | null;
     etn_ben?: string | null;
-    est_ben?: string | null;
+    nivedu_ben?: string | null;
     usu_cre: string;
     fec_cre: Date;
     statusFicha: number;
@@ -396,7 +398,7 @@ export const beneficiarioRepository = {
         reg_ben: data.reg_ben,
         sex_ben: data.sex_ben ?? null,
         etn_ben: data.etn_ben ?? null,
-        est_ben: data.est_ben ?? null,
+        nivedu_ben: data.nivedu_ben ?? null,
         fecnac_ben: fechaIsoLiteral(fecnac_ben) as unknown as Date,
         usu_cre: data.usu_cre,
         fec_cre: sequelize.fn("GETDATE") as unknown as Date,
@@ -473,12 +475,9 @@ export const beneficiarioRepository = {
         com_ben: data.comuna,
         reg_ben: data.region,
         dir_ben: data.direccion ?? null,
-        sex_ben:
-          data.sexo === null || data.sexo === undefined
-            ? null
-            : String(data.sexo),
         tel_ben: data.telefono ?? null,
         cel_ben: data.celular ?? null,
+        email_ben: data.email_ben ?? null,
         statusFicha: 2,
         usu_mod,
         fec_mod: sequelize.fn("GETDATE") as unknown as Date,
