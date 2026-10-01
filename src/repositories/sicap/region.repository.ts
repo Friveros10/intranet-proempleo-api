@@ -1,4 +1,4 @@
-import { Op, QueryTypes } from 'sequelize';
+import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../database/sequelize';
 // import { RegionModel } from '../../models/Region.model';
 

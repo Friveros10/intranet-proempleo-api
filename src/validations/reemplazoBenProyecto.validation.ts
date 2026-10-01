@@ -19,6 +19,9 @@ const nuevoBeneficiarioSchema = z.object({
   fechaNacimiento: z
     .string({ required_error: "La fecha de nacimiento es requerida" })
     .min(1),
+  genero: z.string().optional(),
+  etnia: z.string().nullable().optional(),
+  educacion: z.string().optional(),
 });
 
 // La solicitud llega como multipart/form-data (incluye los PDF adjuntos), por lo

@@ -20,6 +20,9 @@ export interface FichaBeneficiarioRow {
   mat_ben: string | null;
   dir_ben: string | null;
   reg_ben: number | null;
+  sex_ben: string | null;
+  est_ben: string | null;
+  etn_ben: string | null;
   nombre_region: string | null;
   ciu_ben: number | null;
   nombre_ciudad: string | null;
@@ -369,6 +372,9 @@ export const beneficiarioRepository = {
     dir_ben: string | null;
     reg_ben: number | null;
     fecnac_ben: string;
+    sex_ben?: string | null;
+    etn_ben?: string | null;
+    est_ben?: string | null;
     usu_cre: string;
     fec_cre: Date;
     statusFicha: number;
@@ -388,6 +394,9 @@ export const beneficiarioRepository = {
         mat_ben: data.mat_ben,
         dir_ben: data.dir_ben,
         reg_ben: data.reg_ben,
+        sex_ben: data.sex_ben ?? null,
+        etn_ben: data.etn_ben ?? null,
+        est_ben: data.est_ben ?? null,
         fecnac_ben: fechaIsoLiteral(fecnac_ben) as unknown as Date,
         usu_cre: data.usu_cre,
         fec_cre: sequelize.fn("GETDATE") as unknown as Date,

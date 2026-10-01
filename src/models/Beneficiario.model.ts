@@ -26,7 +26,7 @@ export interface Beneficiario {
   usu_eli: string | null;
   fec_eli: Date | null;
   est_ben: string | null;
-  etn_ben: number | null;
+  etn_ben: string | null;
   idchs_ben: string | null;
   dis_ben: string | null;
   aredes_ben: string | null;
@@ -86,7 +86,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare usu_eli: string | null;
   declare fec_eli: Date | null;
   declare est_ben: string | null;
-  declare etn_ben: number | null;
+  declare etn_ben: string | null;
   declare idchs_ben: string | null;
   declare dis_ben: string | null;
   declare aredes_ben: string | null;
@@ -145,7 +145,7 @@ BeneficiarioModel.init(
     usu_eli: DataTypes.STRING,
     fec_eli: DataTypes.DATE,
     est_ben: DataTypes.STRING,
-    etn_ben: DataTypes.INTEGER,
+    etn_ben: DataTypes.STRING,
     idchs_ben: DataTypes.STRING,
     dis_ben: DataTypes.STRING,
     aredes_ben: DataTypes.STRING,
