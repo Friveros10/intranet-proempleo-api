@@ -9,6 +9,7 @@ import { ReemplazoBenProyectoModel } from '../models/ReemplazoBenProyecto.model'
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 import { RegionModel } from '../models/Region.model';
 import { CiudadModel } from '../models/Ciudad.model';
+import { ComunaModel } from '../models/Comuna.model';
 
 /**
  * Define todas las relaciones (Sequelize) entre los modelos legacy SICAP y los
@@ -27,10 +28,21 @@ export function registrarAsociaciones(): void {
   // Proyecto <-> catálogos
   ProyectoModel.belongsTo(RegionModel, { foreignKey: 'reg_pro', targetKey: 'cod_region', as: 'region' });
   ProyectoModel.belongsTo(CiudadModel, { foreignKey: 'ciu_pro', targetKey: 'cod_ciu', as: 'ciudad' });
+  ProyectoModel.belongsTo(ComunaModel, { foreignKey: 'com_pro', targetKey: 'cod_com', as: 'comuna' });
+
+  // Beneficiario <-> catálogos
+  BeneficiarioModel.belongsTo(RegionModel, { foreignKey: 'reg_ben', targetKey: 'cod_region', as: 'region' });
+  BeneficiarioModel.belongsTo(CiudadModel, { foreignKey: 'ciu_ben', targetKey: 'cod_ciu', as: 'ciudad' });
+  BeneficiarioModel.belongsTo(ComunaModel, { foreignKey: 'com_ben', targetKey: 'cod_com', as: 'comuna' });
 
   // Usuario <-> roles
   RolSicapModel.hasMany(UsuarioSicapModel, { foreignKey: 'corr_rol', sourceKey: 'corr_rol', as: 'usuarios' });
   UsuarioSicapModel.belongsTo(RolSicapModel, { foreignKey: 'corr_rol', targetKey: 'corr_rol', as: 'rol' });
+
+  // Usuario <-> catálogos
+  UsuarioSicapModel.belongsTo(RegionModel, { foreignKey: 'reg_usu', targetKey: 'cod_region', as: 'region' });
+  UsuarioSicapModel.belongsTo(CiudadModel, { foreignKey: 'ciu_usu', targetKey: 'cod_ciu', as: 'ciudad' });
+  UsuarioSicapModel.belongsTo(ComunaModel, { foreignKey: 'com_usu', targetKey: 'cod_com', as: 'comuna' });
 
   // rol_menu <-> menus
   MenuModel.hasMany(RolMenuModel, { foreignKey: 'corr_men', sourceKey: 'corr_men', as: 'rolMenus' });

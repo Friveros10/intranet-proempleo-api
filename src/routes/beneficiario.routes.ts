@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { beneficiarioController } from '../controllers/beneficiario.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
-import { requirePermisos } from '../middlewares/rbac.middleware';
+import { requirePermisos, requireRoles } from '../middlewares/rbac.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { crearBeneficiarioSchema, listarBeneficiariosSchema } from '../validations/beneficiario.validation';
+import { completarFichaBeneficiarioSchema, crearBeneficiarioSchema, listarBeneficiariosSchema } from '../validations/beneficiario.validation';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -21,6 +21,17 @@ router.post(
 	requirePermisos('BEN_CREAR'),
 	validate(crearBeneficiarioSchema),
 	asyncHandler(beneficiarioController.crear)
+);
+router.put(
+	'/:rut/completar-ficha',
+	requirePermisos('BEN_CREAR'),
+	validate(completarFichaBeneficiarioSchema),
+	asyncHandler(beneficiarioController.completarFicha)
+);
+router.delete(
+	'/:rut',
+	requireRoles('ADMIN', 'MINISTERIO'),
+	asyncHandler(beneficiarioController.eliminar)
 );
 router.get('/catalogos/regiones', requirePermisos('BEN_VERALL', 'BEN_VERCOM', 'BEN_CREAR'), asyncHandler(beneficiarioController.listarRegiones));
 router.get('/catalogos/ciudades', requirePermisos('BEN_VERALL', 'BEN_VERCOM', 'BEN_CREAR'), asyncHandler(beneficiarioController.listarCiudades));

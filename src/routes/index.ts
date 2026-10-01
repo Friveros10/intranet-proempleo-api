@@ -7,6 +7,7 @@ import docReemplazoBenProyectoRoutes from './docReemplazoBenProyecto.routes';
 import beneficiarioRoutes from './beneficiario.routes';
 import planEgresoHistoricoRoutes from './planEgresoHistorico.routes';
 import wsRoutes from './ws.routes';
+import usuarioRoutes from './usuario.routes';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/documentos-reemplazo', docReemplazoBenProyectoRoutes);
 router.use('/beneficiarios', beneficiarioRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
+router.use('/usuarios', usuarioRoutes);
 
 export default router;

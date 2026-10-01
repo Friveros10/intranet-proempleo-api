@@ -18,7 +18,7 @@ export interface Beneficiario {
   car_ben: string | null;
   sex_ben: string | null;
   jefhog_ben: string | null;
-  nivedu_ben: number | null;
+  nivedu_ben: string | null;
   usu_cre: string | null;
   fec_cre: Date | null;
   usu_mod: string | null;
@@ -26,7 +26,7 @@ export interface Beneficiario {
   usu_eli: string | null;
   fec_eli: Date | null;
   est_ben: string | null;
-  etn_ben: number | null;
+  etn_ben: string | null;
   idchs_ben: string | null;
   dis_ben: string | null;
   aredes_ben: string | null;
@@ -47,6 +47,7 @@ export interface Beneficiario {
   fm_ben: string | null;
   fs_ben: string | null;
   tel_ben: string | null;
+  email_ben: string | null;
   ano_ben: number | null;
   corr_mar: number | null;
   cod_cel_ben: string | null;
@@ -55,6 +56,8 @@ export interface Beneficiario {
   tip_mar: string | null;
   telrec_ben: string | null;
   codtelrec_ben: string | null;
+  status: number;
+  statusFicha: number;
 }
 
 type BeneficiarioCreation = Optional<Beneficiario, 'rut_ben'>;
@@ -76,7 +79,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare car_ben: string | null;
   declare sex_ben: string | null;
   declare jefhog_ben: string | null;
-  declare nivedu_ben: number | null;
+  declare nivedu_ben: string | null;
   declare usu_cre: string | null;
   declare fec_cre: Date | null;
   declare usu_mod: string | null;
@@ -84,7 +87,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare usu_eli: string | null;
   declare fec_eli: Date | null;
   declare est_ben: string | null;
-  declare etn_ben: number | null;
+  declare etn_ben: string | null;
   declare idchs_ben: string | null;
   declare dis_ben: string | null;
   declare aredes_ben: string | null;
@@ -105,6 +108,7 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare fm_ben: string | null;
   declare fs_ben: string | null;
   declare tel_ben: string | null;
+  declare email_ben: string | null;
   declare ano_ben: number | null;
   declare corr_mar: number | null;
   declare cod_cel_ben: string | null;
@@ -113,6 +117,8 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare tip_mar: string | null;
   declare telrec_ben: string | null;
   declare codtelrec_ben: string | null;
+  declare status: number;
+  declare statusFicha: number;
 }
 
 BeneficiarioModel.init(
@@ -133,7 +139,7 @@ BeneficiarioModel.init(
     car_ben: DataTypes.STRING,
     sex_ben: DataTypes.STRING,
     jefhog_ben: DataTypes.STRING,
-    nivedu_ben: DataTypes.INTEGER,
+    nivedu_ben: DataTypes.STRING(255),
     usu_cre: DataTypes.STRING,
     fec_cre: DataTypes.DATE,
     usu_mod: DataTypes.STRING,
@@ -141,7 +147,7 @@ BeneficiarioModel.init(
     usu_eli: DataTypes.STRING,
     fec_eli: DataTypes.DATE,
     est_ben: DataTypes.STRING,
-    etn_ben: DataTypes.INTEGER,
+    etn_ben: DataTypes.STRING,
     idchs_ben: DataTypes.STRING,
     dis_ben: DataTypes.STRING,
     aredes_ben: DataTypes.STRING,
@@ -162,6 +168,7 @@ BeneficiarioModel.init(
     fm_ben: DataTypes.STRING,
     fs_ben: DataTypes.STRING,
     tel_ben: DataTypes.STRING,
+    email_ben: DataTypes.STRING,
     ano_ben: DataTypes.INTEGER,
     corr_mar: DataTypes.INTEGER,
     cod_cel_ben: DataTypes.STRING,
@@ -170,6 +177,8 @@ BeneficiarioModel.init(
     tip_mar: DataTypes.STRING,
     telrec_ben: DataTypes.STRING,
     codtelrec_ben: DataTypes.STRING,
+    status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    statusFicha: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 2 },
   },
   { sequelize, tableName: 'BENEFICIARIOS', schema: 'dbo', timestamps: false }
 );

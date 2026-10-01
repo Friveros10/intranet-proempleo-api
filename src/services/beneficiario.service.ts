@@ -10,6 +10,7 @@ import { ProyectoModel } from "../models/Proyecto.model";
 import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
 import {
+  CompletarFichaBeneficiarioInput,
   CrearBeneficiarioInput,
   ListarBeneficiariosQuery,
 } from "../validations/beneficiario.validation";
@@ -36,8 +37,8 @@ export const beneficiarioService = {
       usuarioSicapRepository.getPermisosDeUsuario(rutUsuario),
     ]);
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    const comunaUsuario = puedeVerTodos ? null : (usuario?.com_usu ?? -1);
-    return beneficiarioRepository.findAllListado(filtros, comunaUsuario);
+    const regionUsuario = puedeVerTodos ? null : (usuario?.reg_usu ?? -1);
+    return beneficiarioRepository.findAllListado(filtros, regionUsuario);
   },
 
   async obtenerPorRut(rutFormateado: string, rutUsuario: number) {
@@ -54,7 +55,7 @@ export const beneficiarioService = {
     }
 
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    if (!puedeVerTodos && beneficiario.com_ben !== usuario?.com_usu) {
+    if (!puedeVerTodos && beneficiario.reg_ben !== usuario?.reg_usu) {
       throw new AppError("No tiene acceso a este beneficiario", 403);
     }
 
@@ -88,6 +89,65 @@ export const beneficiarioService = {
     return beneficiarioRepository.findListadoByRut(rut_ben);
   },
 
+  async eliminar(rutFormateado: string, rutUsuario: number, req: Request) {
+    const rut = limpiarRut(rutFormateado);
+    const beneficiario = await beneficiarioRepository.findListadoByRut(rut);
+    if (!beneficiario) {
+      throw new AppError("Beneficiario no encontrado", 404);
+    }
+
+    const afectados = await beneficiarioRepository.eliminar(
+      rut,
+      String(rutUsuario),
+    );
+    if (afectados === 0) {
+      throw new AppError("El beneficiario ya se encuentra eliminado", 409);
+    }
+
+    await auditLogRepository.registrar({
+      usuarioId: rutUsuario,
+      accion: "BENEFICIARIO_ELIMINADO",
+      modulo: "BENEFICIARIOS",
+      entidad: "BENEFICIARIOS",
+      registroId: String(rut),
+      region: beneficiario.reg_ben,
+      detalle: `Beneficiario eliminado: ${beneficiario.nom_ben} ${beneficiario.pat_ben}`,
+      req,
+    });
+  },
+
+  async completarFicha(
+    rutFormateado: string,
+    data: CompletarFichaBeneficiarioInput,
+    rutUsuario: number,
+    req: Request,
+  ) {
+    const permisos =
+      await usuarioSicapRepository.getPermisosDeUsuario(rutUsuario);
+    if (!permisos.includes(PERMISO_BEN_CREAR)) {
+      throw new AppError("No tiene permisos para completar la ficha", 403);
+    }
+
+    const rut = limpiarRut(rutFormateado);
+    const beneficiario = await beneficiarioRepository.findByRut(rut);
+    if (!beneficiario) {
+      throw new AppError("Beneficiario no encontrado", 404);
+    }
+
+    await beneficiarioRepository.completarFicha(rut, data, String(rutUsuario));
+    await auditLogRepository.registrar({
+      usuarioId: rutUsuario,
+      accion: "BENEFICIARIO_FICHA_COMPLETADA",
+      modulo: "BENEFICIARIOS",
+      entidad: "BENEFICIARIOS",
+      registroId: String(rut),
+      region: data.region,
+      detalle: `Ficha completada para beneficiario ${rut}`,
+      req,
+    });
+    return beneficiarioRepository.findListadoByRut(rut);
+  },
+
   async obtenerBenpro(rutFormateado: string, rutUsuario: number) {
     const rut = limpiarRut(rutFormateado);
     const [beneficiario, proyectos, usuario, permisos] = await Promise.all([
@@ -102,7 +162,7 @@ export const beneficiarioService = {
     }
 
     const puedeVerTodos = permisos.includes(PERMISO_BEN_VER_TODOS);
-    if (!puedeVerTodos && beneficiario.com_ben !== usuario?.com_usu) {
+    if (!puedeVerTodos && beneficiario.reg_ben !== usuario?.reg_usu) {
       throw new AppError("No tiene acceso a este beneficiario", 403);
     }
 
@@ -151,10 +211,6 @@ export const beneficiarioService = {
     );
     if (!puedeVerTodasLasRegiones && ficha.reg_ben !== usuario?.reg_usu) {
       throw new AppError("El beneficiario no pertenece a tu zona", 404);
-    }
-
-    if (ficha.tiene_reemplazo > 0) {
-      throw new AppError("El beneficiario tiene un reemplazo en curso", 404);
     }
 
     const proyecto = await proyectoRepository.findByFolio(ficha.folio_vigente);

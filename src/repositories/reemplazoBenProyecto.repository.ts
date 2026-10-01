@@ -1,13 +1,15 @@
-import { Op, WhereOptions } from 'sequelize';
+import { Op, Transaction, WhereOptions } from 'sequelize';
 import { ReemplazoBenProyectoModel, ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 import { BeneficiarioModel } from '../models/Beneficiario.model';
 import { ProyectoModel } from '../models/Proyecto.model';
 import { UsuarioSicapModel } from '../models/UsuarioSicap.model';
+import { ComunaModel } from '../models/Comuna.model';
 import dayjs from 'dayjs';
 
 export interface ReemplazoFiltros {
   region?: number;
+  comuna?: number;
   fechaDesde?: string;
   fechaHasta?: string;
   status?: ReemplazoStatus;
@@ -36,6 +38,11 @@ export const reemplazoBenProyectoRepository = {
       };
     }
 
+    const whereProyecto: WhereOptions = {};
+    if (filtros.region) whereProyecto.reg_pro = filtros.region;
+    if (filtros.comuna) whereProyecto.com_pro = filtros.comuna;
+    const filtraProyecto = Boolean(filtros.region || filtros.comuna);
+
     return ReemplazoBenProyectoModel.findAll({
       where,
       include: [
@@ -44,8 +51,11 @@ export const reemplazoBenProyectoRepository = {
         {
           model: ProyectoModel,
           as: 'proyecto',
-          where: filtros.region ? { reg_pro: filtros.region } : undefined,
-          required: Boolean(filtros.region),
+          where: filtraProyecto ? whereProyecto : undefined,
+          required: filtraProyecto,
+          include: [
+            { model: ComunaModel, as: 'comuna', attributes: ['cod_com', 'nom_com'], required: false },
+          ],
         },
         { model: UsuarioSicapModel, as: 'usuarioSolicitante' },
       ],
@@ -91,6 +101,35 @@ export const reemplazoBenProyectoRepository = {
     reemplazo.fechaAprobacionReemplazo = new Date().toISOString();
     await reemplazo.save();
     return reemplazo;
+  },
+
+  async findByIds(ids: number[]): Promise<ReemplazoBenProyectoModel[]> {
+    return ReemplazoBenProyectoModel.findAll({
+      where: { id: { [Op.in]: ids } },
+      include: [
+        { model: BeneficiarioModel, as: 'beneficiarioActual' },
+        { model: BeneficiarioModel, as: 'beneficiarioNuevo' },
+        { model: ProyectoModel, as: 'proyecto' },
+        { model: UsuarioSicapModel, as: 'usuarioSolicitante' },
+      ],
+      order: [['id', 'ASC']],
+    });
+  },
+
+  async actualizarChecklist(
+    id: number,
+    data: {
+      criterio_1: number;
+      criterio_2: number;
+      criterio_3: number;
+      criterio_4: number;
+      criterio_5: number;
+      ponderacion: number;
+    },
+    transaction?: Transaction,
+  ): Promise<boolean> {
+    const [filasActualizadas] = await ReemplazoBenProyectoModel.update(data, { where: { id }, transaction });
+    return filasActualizadas > 0;
   },
 
   async eliminar(id: number): Promise<boolean> {
