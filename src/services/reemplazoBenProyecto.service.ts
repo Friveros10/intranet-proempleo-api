@@ -35,6 +35,32 @@ const PERMISO_VER_TODAS_REGIONES = "REM_VERALL";
 const PERMISO_APROBAR = "REM_APROB";
 const PERMISO_RECHAZAR = "REM_RECHAZ";
 
+function puntajeRshAutomatico(puntaje: number | null): number | null {
+  if (puntaje === null || !Number.isFinite(puntaje)) return null;
+  if (puntaje <= 40) return 100;
+  if (puntaje <= 60) return 50;
+  return 0;
+}
+
+function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | null {
+  if (!fechaNacimiento || Number.isNaN(fechaNacimiento.getTime())) return null;
+
+  const hoy = new Date();
+  let edad = hoy.getUTCFullYear() - fechaNacimiento.getUTCFullYear();
+  const diferenciaMes = hoy.getUTCMonth() - fechaNacimiento.getUTCMonth();
+  if (
+    diferenciaMes < 0 ||
+    (diferenciaMes === 0 && hoy.getUTCDate() < fechaNacimiento.getUTCDate())
+  ) {
+    edad -= 1;
+  }
+
+  if (edad < 18) return null;
+  if (edad <= 35) return 0;
+  if (edad <= 45) return 50;
+  return 100;
+}
+
 interface ContextoUsuario {
   regionUsuario: number | null;
   puedeVerTodasLasRegiones: boolean;
@@ -251,6 +277,7 @@ export const reemplazoBenProyectoService = {
         idBeneficiarioNuevo: candidato.cuerpo,
         idProyecto: data.idProyecto,
         rutUsuarioSolicitante,
+        puntajeRsh: candidato.beneficiario.puntajeRsh ?? null,
       });
       // console.log("[reemplazoBenProyectoService.crear] reemplazo creado con id:", reemplazo.id);
       for (const documento of documentosPorRut.get(candidato.cuerpo) ?? []) {
@@ -346,26 +373,58 @@ export const reemplazoBenProyectoService = {
       );
     }
 
-    // La ponderación se recalcula en el servidor; no se confía en el valor del cliente.
-    const evaluaciones = data.candidatos.map(({ id, ...criterios }) => ({
-      id,
-      criterios: {
-        ...criterios,
-        criterio_5: criterios.criterio_5 ?? null,
-        ponderacion:
-          criterios.criterio_1 +
-          criterios.criterio_2 +
-          criterios.criterio_3 +
-          criterios.criterio_4 +
-          (criterios.criterio_5 ?? 0),
-      },
-    }));
+    // Los criterios automáticos se calculan con los datos persistidos del candidato.
+    const evaluaciones = data.candidatos.map(({ id, ...criterios }) => {
+      const reemplazo = reemplazos.find((item) => item.id === id)!;
+      const criterio_2 =
+        puntajeRshAutomatico(reemplazo.puntajeRsh) ?? criterios.criterio_2;
+      const criterio_3 =
+        puntajeEdadAutomatico(reemplazo.beneficiarioNuevo?.fecnac_ben ?? null) ??
+        criterios.criterio_3;
+      const ceros = [criterios.criterio_1, criterio_2, criterio_3].filter(
+        (valor) => valor === 0,
+      ).length;
+      const criterio_4 = ceros === 0 ? 100 : ceros === 1 ? 50 : 0;
+
+      return {
+        id,
+        criterios: {
+          criterio_1: criterios.criterio_1,
+          criterio_2,
+          criterio_3,
+          criterio_4,
+          criterio_5: criterios.criterio_5 ?? null,
+          ponderacion:
+            criterios.criterio_1 +
+            criterio_2 +
+            criterio_3 +
+            criterio_4 +
+            (criterios.criterio_5 ?? 0),
+        },
+      };
+    });
+
+    const ganador = [...evaluaciones].sort((a, b) => {
+      const diferenciaPonderacion =
+        b.criterios.ponderacion - a.criterios.ponderacion;
+      if (diferenciaPonderacion !== 0) return diferenciaPonderacion;
+      const rutA = reemplazos.find((item) => item.id === a.id)!.idBeneficiarioNuevo;
+      const rutB = reemplazos.find((item) => item.id === b.id)!.idBeneficiarioNuevo;
+      return rutA - rutB;
+    })[0];
 
     await sequelize.transaction(async (transaction) => {
       for (const evaluacion of evaluaciones) {
         await reemplazoBenProyectoRepository.actualizarChecklist(
           evaluacion.id,
           evaluacion.criterios,
+          transaction,
+        );
+        const status = evaluacion.id === ganador.id ? "aprobado" : "rechazado";
+        await reemplazoBenProyectoRepository.actualizarEstado(
+          evaluacion.id,
+          status,
+          null,
           transaction,
         );
       }
@@ -381,6 +440,19 @@ export const reemplazoBenProyectoService = {
         registroId: String(evaluacion.id),
         region,
         detalle: `Checklist actualizado con ponderación ${evaluacion.criterios.ponderacion}`,
+        req,
+      });
+      const esGanador = evaluacion.id === ganador.id;
+      await auditLogRepository.registrar({
+        usuarioId: rutUsuario,
+        accion: esGanador ? "REEMPLAZO_APROBADO" : "REEMPLAZO_RECHAZADO",
+        modulo: "REEMPLAZOS",
+        entidad: "Reemplazo_benpro",
+        registroId: String(evaluacion.id),
+        region,
+        detalle: esGanador
+          ? `Aprobado automáticamente con ponderación ${evaluacion.criterios.ponderacion}`
+          : `Rechazado automáticamente; ponderación ${evaluacion.criterios.ponderacion}, ganador ${ganador.criterios.ponderacion}`,
         req,
       });
     }

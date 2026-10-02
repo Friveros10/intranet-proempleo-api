@@ -22,6 +22,7 @@ const nuevoBeneficiarioSchema = z.object({
   genero: z.string().optional(),
   etnia: z.string().nullable().optional(),
   educacion: z.string().optional(),
+  puntajeRsh: z.number().int().min(0).max(100).nullable().optional(),
 });
 
 // La solicitud llega como multipart/form-data (incluye los PDF adjuntos), por lo

@@ -80,6 +80,7 @@ export const reemplazoBenProyectoRepository = {
     idBeneficiarioNuevo: number;
     idProyecto: number;
     rutUsuarioSolicitante: number;
+    puntajeRsh: number | null;
   }): Promise<ReemplazoBenProyectoModel> {
     return ReemplazoBenProyectoModel.create({
       ...data,
@@ -93,13 +94,14 @@ export const reemplazoBenProyectoRepository = {
     id: number,
     status: ReemplazoStatus,
     comentarioRechazo: string | null = null,
+    transaction?: Transaction,
   ): Promise<ReemplazoBenProyectoModel | null> {
-    const reemplazo = await ReemplazoBenProyectoModel.findByPk(id);
+    const reemplazo = await ReemplazoBenProyectoModel.findByPk(id, { transaction });
     if (!reemplazo) return null;
     reemplazo.status = status;
     reemplazo.comentarioRechazo = comentarioRechazo;
     reemplazo.fechaAprobacionReemplazo = new Date().toISOString();
-    await reemplazo.save();
+    await reemplazo.save({ transaction });
     return reemplazo;
   },
 

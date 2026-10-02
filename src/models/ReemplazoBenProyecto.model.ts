@@ -1,5 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
+import { BeneficiarioModel } from './Beneficiario.model';
 import { ProyectoModel } from './Proyecto.model';
 import {
   CRITERIO_VALOR_MAX,
@@ -24,6 +25,7 @@ export interface ReemplazoBenProyecto {
   criterio_4: number | null;
   criterio_5: number | null;
   ponderacion: number | null;
+  puntajeRsh: number | null;
 }
 
 type ReemplazoCreation = Optional<
@@ -37,6 +39,7 @@ type ReemplazoCreation = Optional<
   | 'criterio_4'
   | 'criterio_5'
   | 'ponderacion'
+  | 'puntajeRsh'
 >;
 
 function crearCriterioAttribute() {
@@ -70,6 +73,8 @@ export class ReemplazoBenProyectoModel
   declare criterio_4: number | null;
   declare criterio_5: number | null;
   declare ponderacion: number | null;
+  declare puntajeRsh: number | null;
+  declare beneficiarioNuevo?: BeneficiarioModel;
   // Asociación cargada solo cuando se hace include: [{ model: ProyectoModel, as: 'proyecto' }]
   declare proyecto?: ProyectoModel;
 }
@@ -96,6 +101,7 @@ ReemplazoBenProyectoModel.init(
     criterio_4: crearCriterioAttribute(),
     criterio_5: crearCriterioAttribute(),
     ponderacion: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
+    puntajeRsh: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
   },
   { sequelize, tableName: 'Reemplazo_benpro', schema: 'dbo', timestamps: false }
 );
