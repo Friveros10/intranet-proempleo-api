@@ -351,12 +351,13 @@ export const reemplazoBenProyectoService = {
       id,
       criterios: {
         ...criterios,
+        criterio_5: criterios.criterio_5 ?? null,
         ponderacion:
           criterios.criterio_1 +
           criterios.criterio_2 +
           criterios.criterio_3 +
           criterios.criterio_4 +
-          criterios.criterio_5,
+          (criterios.criterio_5 ?? 0),
       },
     }));
 

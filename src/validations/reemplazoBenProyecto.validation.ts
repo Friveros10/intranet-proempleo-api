@@ -116,7 +116,14 @@ const checklistCandidatoSchema = z.object({
   criterio_2: criterioSchema,
   criterio_3: criterioSchema,
   criterio_4: criterioSchema,
-  criterio_5: criterioSchema,
+  criterio_5: z
+    .number()
+    .int()
+    .nullable()
+    .optional()
+    .refine((valor) => valor == null || valor === 0, {
+      message: "El criterio 5 solo puede ser 0 o nulo",
+    }),
 });
 
 export const actualizarChecklistReemplazoSchema = z.object({

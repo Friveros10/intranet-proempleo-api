@@ -123,7 +123,7 @@ export const reemplazoBenProyectoRepository = {
       criterio_2: number;
       criterio_3: number;
       criterio_4: number;
-      criterio_5: number;
+      criterio_5: number | null;
       ponderacion: number;
     },
     transaction?: Transaction,
