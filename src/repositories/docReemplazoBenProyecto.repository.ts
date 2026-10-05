@@ -1,15 +1,34 @@
 import { DocReemplazoBenProyectoModel, DocumentoStatus } from '../models/DocReemplazoBenProyecto.model';
-import { BeneficiarioModel } from '../models/Beneficiario.model';
+import { beneficiarioRepository } from './sicap/beneficiario.repository';
+
+// Adjunta el resumen del beneficiario a cada documento. Ya no se puede usar un
+// include a BeneficiarioModel porque los beneficiarios nuevos viven en
+// beneficiarios_proempleo; se resuelven en ambas tablas con una sola query y
+// quedan en dataValues (se serializan en el JSON con la clave "beneficiario").
+async function adjuntarBeneficiario(
+  documentos: DocReemplazoBenProyectoModel[],
+): Promise<void> {
+  const ruts = [...new Set(documentos.map((doc) => doc.idBeneficiario))];
+  const resumenes = await beneficiarioRepository.findResumenesPorRuts(ruts);
+  for (const doc of documentos) {
+    (doc.dataValues as unknown as Record<string, unknown>).beneficiario =
+      resumenes.get(doc.idBeneficiario) ?? null;
+  }
+}
 
 export const docReemplazoBenProyectoRepository = {
   async findAll(): Promise<DocReemplazoBenProyectoModel[]> {
-    return DocReemplazoBenProyectoModel.findAll({ include: [{ model: BeneficiarioModel, as: 'beneficiario' }] });
+    const documentos = await DocReemplazoBenProyectoModel.findAll();
+    await adjuntarBeneficiario(documentos);
+    return documentos;
   },
 
   async findById(id: number): Promise<DocReemplazoBenProyectoModel | null> {
-    return DocReemplazoBenProyectoModel.findByPk(id, {
-      include: [{ model: BeneficiarioModel, as: 'beneficiario' }],
-    });
+    const doc = await DocReemplazoBenProyectoModel.findByPk(id);
+    if (doc) {
+      await adjuntarBeneficiario([doc]);
+    }
+    return doc;
   },
 
   async findByReemplazo(idReemplazoBenProyecto: number): Promise<DocReemplazoBenProyectoModel[]> {

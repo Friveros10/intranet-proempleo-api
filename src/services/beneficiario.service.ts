@@ -75,7 +75,10 @@ export const beneficiarioService = {
       throw new AppError("El beneficiario ya existe", 409);
     }
 
-    await beneficiarioRepository.createCompleto({ ...data, rut_ben, dig_ben });
+    await beneficiarioRepository.createCompleto(
+      { ...data, rut_ben, dig_ben },
+      String(rutUsuario),
+    );
     await auditLogRepository.registrar({
       usuarioId: rutUsuario,
       accion: "BENEFICIARIO_CREADO",

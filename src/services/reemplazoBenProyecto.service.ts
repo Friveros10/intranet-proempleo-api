@@ -61,6 +61,32 @@ function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | null {
   return 100;
 }
 
+// Lee la fecha de nacimiento del beneficiario nuevo desde los datos adjuntos al
+// reemplazo. El repositorio los deja en dataValues (vienen del UNION entre
+// BENEFICIARIOS y beneficiarios_proempleo), por lo que se leen vía toJSON().
+function fechaNacimientoBeneficiarioNuevo(
+  reemplazo: ReemplazoBenProyectoModel,
+): Date | null {
+  const beneficiario = (reemplazo.toJSON() as unknown as Record<string, unknown>)
+    .beneficiarioNuevo as { fecnac_ben?: string | Date | null } | null | undefined;
+  const valor = beneficiario?.fecnac_ben;
+  if (!valor) return null;
+  const fecha = valor instanceof Date ? valor : new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
+// Lee el proyecto asociado al reemplazo. Los includes quedan en dataValues y no
+// se exponen como propiedad directa de la instancia, por lo que se leen vía
+// toJSON().
+export function obtenerProyectoReemplazo(
+  reemplazo: ReemplazoBenProyectoModel | null | undefined,
+): { reg_pro: number | null; fol_pro: number } | null {
+  if (!reemplazo) return null;
+  const proyecto = (reemplazo.toJSON() as unknown as Record<string, unknown>)
+    .proyecto as { reg_pro: number | null; fol_pro: number } | null | undefined;
+  return proyecto ?? null;
+}
+
 interface ContextoUsuario {
   regionUsuario: number | null;
   puedeVerTodasLasRegiones: boolean;
@@ -143,7 +169,7 @@ export const reemplazoBenProyectoService = {
     const contexto = await obtenerContextoUsuario(rutUsuario);
     if (
       !contexto.puedeVerTodasLasRegiones &&
-      reemplazo.proyecto?.reg_pro !== contexto.regionUsuario
+      obtenerProyectoReemplazo(reemplazo)?.reg_pro !== contexto.regionUsuario
     ) {
       throw new AppError("No tiene acceso a este registro", 403);
     }
@@ -343,7 +369,7 @@ export const reemplazoBenProyectoService = {
       modulo: "REEMPLAZOS",
       entidad: "Reemplazo_benpro",
       registroId: String(id),
-      region: reemplazoActual?.proyecto?.reg_pro ?? null,
+      region: obtenerProyectoReemplazo(reemplazoActual)?.reg_pro ?? null,
       detalle:
         status === "rechazado" && comentario
           ? comentario
@@ -379,7 +405,7 @@ export const reemplazoBenProyectoService = {
       const criterio_2 =
         puntajeRshAutomatico(reemplazo.puntajeRsh) ?? criterios.criterio_2;
       const criterio_3 =
-        puntajeEdadAutomatico(reemplazo.beneficiarioNuevo?.fecnac_ben ?? null) ??
+        puntajeEdadAutomatico(fechaNacimientoBeneficiarioNuevo(reemplazo)) ??
         criterios.criterio_3;
       const ceros = [criterios.criterio_1, criterio_2, criterio_3].filter(
         (valor) => valor === 0,
@@ -430,7 +456,7 @@ export const reemplazoBenProyectoService = {
       }
     });
 
-    const region = reemplazos[0].proyecto?.reg_pro ?? null;
+    const region = obtenerProyectoReemplazo(reemplazos[0])?.reg_pro ?? null;
     for (const evaluacion of evaluaciones) {
       await auditLogRepository.registrar({
         usuarioId: rutUsuario,
@@ -473,7 +499,7 @@ export const reemplazoBenProyectoService = {
       modulo: "REEMPLAZOS",
       entidad: "Reemplazo_benpro",
       registroId: String(id),
-      region: reemplazoActual?.proyecto?.reg_pro ?? null,
+      region: obtenerProyectoReemplazo(reemplazoActual)?.reg_pro ?? null,
       detalle: "Solicitud de Reemplazo de Cupo eliminada",
       req,
     });

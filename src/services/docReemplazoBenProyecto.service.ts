@@ -1,6 +1,7 @@
 import { Request } from "express";
 import { docReemplazoBenProyectoRepository } from "../repositories/docReemplazoBenProyecto.repository";
 import { reemplazoBenProyectoRepository } from "../repositories/reemplazoBenProyecto.repository";
+import { obtenerProyectoReemplazo } from "./reemplazoBenProyecto.service";
 import { auditLogRepository } from "../repositories/auditLog.repository";
 import { beneficiarioRepository } from "../repositories/sicap/beneficiario.repository";
 import { AppError } from "../utils/AppError";
@@ -62,7 +63,7 @@ export const docReemplazoBenProyectoService = {
       modulo: "DOCUMENTOS_REEMPLAZO",
       entidad: "Doc_reemplazo_benpro",
       registroId: String(documento.id),
-      region: reemplazo.proyecto?.reg_pro ?? null,
+      region: obtenerProyectoReemplazo(reemplazo)?.reg_pro ?? null,
       detalle: `Documento cargado para reemplazo ${data.idReemplazoBenProyecto}`,
       req,
     });
@@ -101,11 +102,11 @@ export const docReemplazoBenProyectoService = {
       modulo: "DOCUMENTOS_REEMPLAZO",
       entidad: "Doc_reemplazo_benpro",
       registroId: String(id),
-      region: reemplazo?.proyecto?.reg_pro ?? null,
+      region: obtenerProyectoReemplazo(reemplazo)?.reg_pro ?? null,
       detalle:
         status === "rechazado" && comentarioRechazo
-          ? `Documento ${status} en reemplazo para proyecto ${reemplazo?.proyecto?.fol_pro}: ` + comentarioRechazo
-          : `Documento ${status} en reemplazo para proyecto ${reemplazo?.proyecto?.fol_pro}`,
+          ? `Documento ${status} en reemplazo para proyecto ${obtenerProyectoReemplazo(reemplazo)?.fol_pro}: ` + comentarioRechazo
+          : `Documento ${status} en reemplazo para proyecto ${obtenerProyectoReemplazo(reemplazo)?.fol_pro}`,
       req,
     });
     return actualizado;
@@ -142,7 +143,7 @@ export const docReemplazoBenProyectoService = {
         modulo: "DOCUMENTOS_REEMPLAZO",
         entidad: "Doc_reemplazo_benpro",
         registroId: String(id),
-        region: reemplazo?.proyecto?.reg_pro ?? null,
+        region: obtenerProyectoReemplazo(reemplazo)?.reg_pro ?? null,
         detalle: `Documento reemplazado: ${nombreArchivo}`,
         req,
       });

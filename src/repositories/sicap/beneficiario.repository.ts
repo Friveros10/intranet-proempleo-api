@@ -1,5 +1,9 @@
-import { Op } from "sequelize";
-import { BeneficiarioModel } from "../../models/Beneficiario.model";
+import { Op, QueryTypes } from "sequelize";
+import {
+  Beneficiario,
+  BeneficiarioModel,
+} from "../../models/Beneficiario.model";
+import { BeneficiarioProempleoModel } from "../../models/BeneficiarioProempleo.model";
 import { BenProModel } from "../../models/BenPro.model";
 import { ProyectoModel } from "../../models/Proyecto.model";
 import { RegionModel } from "../../models/Region.model";
@@ -68,6 +72,17 @@ export interface ProyectoBeneficiarioRow {
   est_benpro: string | null;
 }
 
+// Resumen del beneficiario usado por el flujo de reemplazos (misma forma que
+// entregaba el include legacy de BeneficiarioModel).
+export interface BeneficiarioResumenRow {
+  rut_ben: number;
+  dig_ben: string | null;
+  nom_ben: string | null;
+  pat_ben: string | null;
+  mat_ben: string | null;
+  fecnac_ben: string | null;
+}
+
 export interface CatalogoRegionRow {
   cod_region: number;
   nom_region: string | null;
@@ -123,140 +138,223 @@ function fechaIsoLiteral(fechaIso: string) {
   return sequelize.literal(`'${fechaIso}'`);
 }
 
-function buildBeneficiarioWhere(
+// Subconsulta que unifica la tabla legacy BENEFICIARIOS con la nueva tabla
+// beneficiarios_proempleo en una misma query. Las columnas descriptivas de la
+// tabla nueva se alinean (alias) a los nombres legacy que consume la API, de
+// modo que ambas tablas entreguen una sola forma de fila.
+const UNION_BENEFICIARIOS_SQL = `
+  SELECT
+    b.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, b.dir_ben,
+    b.reg_ben, b.ciu_ben, b.com_ben,
+    CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
+    b.sex_ben, b.tel_ben, b.cel_ben, b.email_ben, b.status, b.statusFicha
+  FROM dbo.BENEFICIARIOS b
+  UNION ALL
+  SELECT
+    p.rutBeneficiario, p.digitoVerificador, p.nombres, p.apellidoPaterno,
+    p.apellidoMaterno, p.direccion, p.idRegion, p.idCiudad, p.idComuna,
+    CONVERT(VARCHAR(10), p.fechaNacimiento, 23),
+    p.sexo, p.telefono, p.celular, p.email, p.status, p.statusFicha
+  FROM dbo.beneficiarios_proempleo p
+`;
+
+// SELECT del listado unificado: agrega los nombres de región/ciudad/comuna vía
+// LEFT JOIN (fecnac_ben ya viene formateada sin hora desde el UNION).
+const SELECT_LISTADO_SQL = `
+  SELECT
+    ben.rut_ben, ben.dig_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.dir_ben,
+    ben.reg_ben, r.Nom_region AS nombre_region,
+    ben.ciu_ben, c.nom_ciu AS nombre_ciudad,
+    ben.com_ben, co.nom_com AS nombre_comuna,
+    ben.fecnac_ben, ben.sex_ben, ben.tel_ben, ben.cel_ben, ben.email_ben,
+    ben.status, ben.statusFicha
+  FROM (${UNION_BENEFICIARIOS_SQL}) ben
+  LEFT JOIN dbo.REGIONES r ON r.cod_region = ben.reg_ben
+  LEFT JOIN dbo.CIUDADES c ON c.cod_ciu = ben.ciu_ben AND c.estado = 'ACTIVO'
+  LEFT JOIN dbo.COMUNAS co ON co.cod_com = ben.com_ben
+`;
+
+// Construye el WHERE del listado unificado (equivalente al antiguo
+// buildBeneficiarioWhere, pero en SQL crudo para poder aplicarse al UNION ALL).
+function buildListadoWhereSql(
   filtros: ListarBeneficiariosQuery,
   regionUsuario?: number | null,
-) {
-  const and: Record<string, unknown>[] = [
-    { statusFicha: { [Op.gt]: 0 } },
-    { status: { [Op.gt]: 0 } },
-  ];
+): { whereSql: string; replacements: Record<string, unknown> } {
+  const condiciones = ["ben.statusFicha > 0", "ben.status > 0"];
+  const replacements: Record<string, unknown> = {};
 
   if (regionUsuario) {
-    and.push({ reg_ben: regionUsuario });
+    condiciones.push("ben.reg_ben = :regionUsuario");
+    replacements.regionUsuario = regionUsuario;
   } else {
     if (filtros.region) {
-      and.push({ reg_ben: filtros.region });
+      condiciones.push("ben.reg_ben = :region");
+      replacements.region = filtros.region;
     }
     if (filtros.ciudad) {
-      and.push({ ciu_ben: filtros.ciudad });
+      condiciones.push("ben.ciu_ben = :ciudad");
+      replacements.ciudad = filtros.ciudad;
     }
     if (filtros.comuna) {
-      and.push({ com_ben: filtros.comuna });
+      condiciones.push("ben.com_ben = :comuna");
+      replacements.comuna = filtros.comuna;
     }
   }
 
   if (filtros.search) {
-    const termino = `%${filtros.search}%`;
-    and.push({
-      [Op.or]: [
-        sequelize.where(
-          sequelize.cast(sequelize.col("rut_ben"), "VARCHAR(20)"),
-          {
-            [Op.like]: termino,
-          },
-        ),
-        { nom_ben: { [Op.like]: termino } },
-        { pat_ben: { [Op.like]: termino } },
-        { mat_ben: { [Op.like]: termino } },
-      ],
-    });
+    condiciones.push(
+      "(CAST(ben.rut_ben AS VARCHAR(20)) LIKE :search OR ben.nom_ben LIKE :search OR ben.pat_ben LIKE :search OR ben.mat_ben LIKE :search)",
+    );
+    replacements.search = `%${filtros.search}%`;
   }
 
-  return { [Op.and]: and };
+  return { whereSql: condiciones.join(" AND "), replacements };
 }
 
-// Atributos e includes compartidos por los listados de beneficiarios: agrega los
-// nombres de región/ciudad/comuna vía LEFT JOIN y formatea fecnac_ben sin hora.
-const ATRIBUTOS_LISTADO: any[] = [
-  "rut_ben",
-  "dig_ben",
-  "nom_ben",
-  "pat_ben",
-  "mat_ben",
-  "dir_ben",
-  "reg_ben",
-  "ciu_ben",
-  "com_ben",
-  [
-    sequelize.fn(
-      "CONVERT",
-      sequelize.literal("VARCHAR(10)"),
-      sequelize.col("fecnac_ben"),
-      23,
-    ),
-    "fecnac_ben",
-  ],
-  "sex_ben",
-  "tel_ben",
-  "cel_ben",
-  "email_ben",
-  "status",
-  "statusFicha",
-  [sequelize.col("region.Nom_region"), "nombre_region"],
-  [sequelize.col("ciudad.nom_ciu"), "nombre_ciudad"],
-  [sequelize.col("comuna.nom_com"), "nombre_comuna"],
-];
-
-const INCLUDES_LISTADO = [
-  { model: RegionModel, as: "region", attributes: [], required: false },
-  {
-    model: CiudadModel,
-    as: "ciudad",
-    attributes: [],
-    required: false,
-    where: { estado: "ACTIVO" },
-  },
-  { model: ComunaModel, as: "comuna", attributes: [], required: false },
-];
+// Normaliza un registro de beneficiarios_proempleo a la forma legacy (interfaz
+// Beneficiario), para que los consumidores existentes sigan funcionando igual.
+function mapearProempleoALegacy(p: BeneficiarioProempleoModel): Beneficiario {
+  return {
+    rut_ben: p.rutBeneficiario,
+    dig_ben: p.digitoVerificador,
+    nom_ben: p.nombres,
+    pat_ben: p.apellidoPaterno,
+    mat_ben: p.apellidoMaterno,
+    dir_ben: p.direccion,
+    reg_ben: p.idRegion,
+    ciu_ben: p.idCiudad,
+    com_ben: p.idComuna,
+    civ_ben: null,
+    nac_ben: null,
+    fecnac_ben: p.fechaNacimiento,
+    tra_ben: null,
+    car_ben: null,
+    sex_ben: p.sexo,
+    jefhog_ben: null,
+    nivedu_ben: p.nivelEducacional,
+    usu_cre: p.usuarioCreacion,
+    fec_cre: p.fechaCreacion,
+    usu_mod: p.usuarioModificacion,
+    fec_mod: p.fechaModificacion,
+    usu_eli: p.usuarioEliminacion,
+    fec_eli: p.fechaEliminacion,
+    est_ben: null,
+    etn_ben: p.etnia,
+    idchs_ben: null,
+    dis_ben: null,
+    aredes_ben: null,
+    pan_ben: null,
+    con_ben: null,
+    peninh_ben: null,
+    cerdes_ben: null,
+    eda_ben: null,
+    chs_ben: null,
+    idcerdes_ben: null,
+    cod_RC: null,
+    fec_RC: null,
+    usu_apr: null,
+    fec_apr: null,
+    usu_imp: null,
+    fec_imp: null,
+    key_imp: null,
+    fm_ben: null,
+    fs_ben: null,
+    tel_ben: p.telefono,
+    email_ben: p.email,
+    ano_ben: null,
+    corr_mar: null,
+    cod_cel_ben: null,
+    cel_ben: p.celular,
+    cod_tel_ben: null,
+    tip_mar: null,
+    telrec_ben: null,
+    codtelrec_ben: null,
+    status: p.status,
+    statusFicha: p.statusFicha,
+  };
+}
 
 export const beneficiarioRepository = {
   async findAll(): Promise<BeneficiarioModel[]> {
     return BeneficiarioModel.findAll();
   },
 
-  async findByRut(rut_ben: number): Promise<BeneficiarioModel | null> {
+  // Busca primero en beneficiarios_proempleo (registros nuevos) y luego en la
+  // tabla legacy BENEFICIARIOS. Siempre devuelve la forma legacy de la interfaz.
+  async findByRut(rut_ben: number): Promise<Beneficiario | null> {
+    const proempleo = await BeneficiarioProempleoModel.findOne({
+      where: { rutBeneficiario: rut_ben },
+    });
+    if (proempleo) {
+      return mapearProempleoALegacy(proempleo);
+    }
     return BeneficiarioModel.findByPk(rut_ben);
   },
 
   async findListadoByRut(
     rut_ben: number,
   ): Promise<BeneficiarioListadoRow | null> {
-    const row = await BeneficiarioModel.findOne({
-      where: { rut_ben },
-      attributes: ATRIBUTOS_LISTADO,
-      include: INCLUDES_LISTADO,
-      raw: true,
-    });
-    return (row as unknown as BeneficiarioListadoRow) ?? null;
+    const rows = await sequelize.query<BeneficiarioListadoRow>(
+      `${SELECT_LISTADO_SQL} WHERE ben.rut_ben = :rut`,
+      { type: QueryTypes.SELECT, replacements: { rut: rut_ben } },
+    );
+    return rows[0] ?? null;
+  },
+
+  // Resuelve los datos básicos de beneficiarios en ambas tablas (legacy +
+  // beneficiarios_proempleo) para un conjunto de RUTs. Usado por reemplazos.
+  async findResumenesPorRuts(
+    ruts: number[],
+  ): Promise<Map<number, BeneficiarioResumenRow>> {
+    if (ruts.length === 0) {
+      return new Map();
+    }
+    const rows = await sequelize.query<BeneficiarioResumenRow>(
+      `SELECT ben.rut_ben, ben.dig_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.fecnac_ben
+       FROM (${UNION_BENEFICIARIOS_SQL}) ben
+       WHERE ben.rut_ben IN (:ruts)`,
+      { type: QueryTypes.SELECT, replacements: { ruts } },
+    );
+    return new Map(rows.map((row) => [row.rut_ben, row]));
   },
 
   async findAllListado(
     filtros: ListarBeneficiariosQuery,
     regionUsuario?: number | null,
   ): Promise<BeneficiarioListadoPaginado> {
-    const where = buildBeneficiarioWhere(filtros, regionUsuario);
     const page = filtros.page;
     const limit = 50;
     const offset = (page - 1) * limit;
-    const { count, rows } = await BeneficiarioModel.findAndCountAll({
-      where,
-      attributes: ATRIBUTOS_LISTADO,
-      include: INCLUDES_LISTADO,
-      order: [["statusFicha", "ASC"]],
-      limit,
-      offset,
-      subQuery: false,
-      raw: true,
-    });
+    const { whereSql, replacements } = buildListadoWhereSql(
+      filtros,
+      regionUsuario,
+    );
 
+    const [rows, totalRows] = await Promise.all([
+      sequelize.query<BeneficiarioListadoRow>(
+        `${SELECT_LISTADO_SQL}
+         WHERE ${whereSql}
+         ORDER BY ben.statusFicha ASC
+         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
+        {
+          type: QueryTypes.SELECT,
+          replacements: { ...replacements, offset, limit },
+        },
+      ),
+      sequelize.query<{ total: number }>(
+        `SELECT COUNT(*) AS total FROM (${UNION_BENEFICIARIOS_SQL}) ben WHERE ${whereSql}`,
+        { type: QueryTypes.SELECT, replacements },
+      ),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
     return {
-      data: rows as unknown as BeneficiarioListadoRow[],
+      data: rows,
       pagination: {
         page,
         limit,
-        total: count,
-        totalPages: Math.max(1, Math.ceil(count / limit)),
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   },
@@ -380,80 +478,76 @@ export const beneficiarioRepository = {
     usu_cre: string;
     fec_cre: Date;
     statusFicha: number;
-  }): Promise<BeneficiarioModel> {
-    // console.log("[beneficiarioRepository.create] data recibida:", data);
+  }): Promise<BeneficiarioProempleoModel> {
     // fecnac_ben llega como "DD-MM-YYYY"; se convierte a "YYYY-MM-DD" antes de armar el literal.
     const [dia, mes, anio] = data.fecnac_ben.split("-").map(Number);
     const fecnac_ben = `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-    // console.log("[beneficiarioRepository.create] fecnac_ben parseada:", fecnac_ben);
 
-    try {
-      const creado = await BeneficiarioModel.create({
-        rut_ben: data.rut_ben,
-        dig_ben: data.dig_ben,
-        nom_ben: data.nom_ben,
-        pat_ben: data.pat_ben,
-        mat_ben: data.mat_ben,
-        dir_ben: data.dir_ben,
-        reg_ben: data.reg_ben,
-        sex_ben: data.sex_ben ?? null,
-        etn_ben: data.etn_ben ?? null,
-        nivedu_ben: data.nivedu_ben ?? null,
-        fecnac_ben: fechaIsoLiteral(fecnac_ben) as unknown as Date,
-        usu_cre: data.usu_cre,
-        fec_cre: sequelize.fn("GETDATE") as unknown as Date,
-        status: 1,
-        statusFicha: data.statusFicha,
-      });
-      // console.log("[beneficiarioRepository.create] beneficiario creado:", creado.toJSON());
-      return creado;
-    } catch (error) {
-      // console.log("[beneficiarioRepository.create] error al crear beneficiario:", error);
-      throw error;
-    }
+    const creado = await BeneficiarioProempleoModel.create({
+      rutBeneficiario: data.rut_ben,
+      digitoVerificador: data.dig_ben,
+      nombres: data.nom_ben,
+      apellidoPaterno: data.pat_ben,
+      apellidoMaterno: data.mat_ben,
+      direccion: data.dir_ben,
+      idRegion: data.reg_ben,
+      sexo: data.sex_ben ?? null,
+      etnia: data.etn_ben ?? null,
+      nivelEducacional: data.nivedu_ben ?? null,
+      fechaNacimiento: fechaIsoLiteral(fecnac_ben) as unknown as Date,
+      usuarioCreacion: data.usu_cre,
+      fechaCreacion: sequelize.fn("GETDATE") as unknown as Date,
+      status: 1,
+      statusFicha: data.statusFicha,
+    });
+    return creado;
   },
 
   async createCompleto(
     data: CrearBeneficiarioInput & { rut_ben: number; dig_ben: string },
-  ): Promise<BeneficiarioModel> {
-    // console.log("[beneficiarioRepository.createCompleto] data recibida:", data);
+    usu_cre?: string,
+  ): Promise<BeneficiarioProempleoModel> {
     // fechaNacimiento llega como "YYYY-MM-DD" (formato ISO).
-    // console.log("[beneficiarioRepository.createCompleto] fecnac_ben:", data.fechaNacimiento);
-
-    try {
-      const creado = await BeneficiarioModel.create({
-        rut_ben: data.rut_ben,
-        dig_ben: data.dig_ben,
-        nom_ben: data.nombres,
-        pat_ben: data.apellidoPaterno,
-        mat_ben: data.apellidoMaterno,
-        dir_ben: data.direccion ?? null,
-        reg_ben: data.region,
-        ciu_ben: data.ciudad,
-        com_ben: data.comuna,
-        fecnac_ben: fechaIsoLiteral(data.fechaNacimiento) as unknown as Date,
-        sex_ben:
-          data.sexo === null || data.sexo === undefined
-            ? null
-            : String(data.sexo),
-        tel_ben: data.telefono ?? null,
-        cel_ben: data.celular ?? null,
-        status: 1,
-        statusFicha: 2,
-      });
-      // console.log("[beneficiarioRepository.createCompleto] beneficiario creado:", creado.toJSON());
-      return creado;
-    } catch (error) {
-      console.log(
-        "[beneficiarioRepository.createCompleto] error al crear beneficiario:",
-        error,
-      );
-      throw error;
-    }
+    const creado = await BeneficiarioProempleoModel.create({
+      rutBeneficiario: data.rut_ben,
+      digitoVerificador: data.dig_ben,
+      nombres: data.nombres,
+      apellidoPaterno: data.apellidoPaterno,
+      apellidoMaterno: data.apellidoMaterno,
+      direccion: data.direccion ?? null,
+      idRegion: data.region,
+      idCiudad: data.ciudad,
+      idComuna: data.comuna,
+      fechaNacimiento: fechaIsoLiteral(data.fechaNacimiento) as unknown as Date,
+      sexo:
+        data.sexo === null || data.sexo === undefined
+          ? null
+          : String(data.sexo),
+      telefono: data.telefono ?? null,
+      celular: data.celular ?? null,
+      usuarioCreacion: usu_cre ?? null,
+      fechaCreacion: sequelize.fn("GETDATE") as unknown as Date,
+      status: 1,
+      statusFicha: 2,
+    });
+    return creado;
   },
 
+  // Elimina lógicamente en la tabla que contenga al beneficiario: primero se
+  // intenta en beneficiarios_proempleo y, si no está ahí, en BENEFICIARIOS.
   async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
-    const [affected] = await BeneficiarioModel.update(
+    const [afectadosProempleo] = await BeneficiarioProempleoModel.update(
+      {
+        status: -1,
+        usuarioEliminacion: usu_eli,
+        fechaEliminacion: sequelize.fn("GETDATE") as unknown as Date,
+      },
+      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } } },
+    );
+    if (afectadosProempleo > 0) {
+      return afectadosProempleo;
+    }
+    const [afectadosLegacy] = await BeneficiarioModel.update(
       {
         status: -1,
         usu_eli,
@@ -461,14 +555,40 @@ export const beneficiarioRepository = {
       },
       { where: { rut_ben, status: { [Op.gt]: 0 } } },
     );
-    return affected ?? 0;
+    return afectadosLegacy ?? 0;
   },
 
+  // Actualiza la ficha en la tabla que contenga al beneficiario: si existe en
+  // beneficiarios_proempleo se usa el modelo nuevo; si no, la tabla legacy.
   async completarFicha(
     rut_ben: number,
     data: CompletarFichaBeneficiarioInput,
     usu_mod: string,
-  ): Promise<BeneficiarioModel> {
+  ): Promise<BeneficiarioModel | BeneficiarioProempleoModel> {
+    const proempleo = await BeneficiarioProempleoModel.findOne({
+      where: { rutBeneficiario: rut_ben },
+    });
+    if (proempleo) {
+      await BeneficiarioProempleoModel.update(
+        {
+          idCiudad: data.ciudad,
+          idComuna: data.comuna,
+          idRegion: data.region,
+          direccion: data.direccion ?? null,
+          telefono: data.telefono ?? null,
+          celular: data.celular ?? null,
+          email: data.email_ben ?? null,
+          statusFicha: 2,
+          usuarioModificacion: usu_mod,
+          fechaModificacion: sequelize.fn("GETDATE") as unknown as Date,
+        },
+        { where: { rutBeneficiario: rut_ben } },
+      );
+      return (await BeneficiarioProempleoModel.findOne({
+        where: { rutBeneficiario: rut_ben },
+      })) as BeneficiarioProempleoModel;
+    }
+
     await BeneficiarioModel.update(
       {
         ciu_ben: data.ciudad,
@@ -524,25 +644,39 @@ export const beneficiarioRepository = {
   async findByRutFromBenPro(
     rut_ben: number,
   ): Promise<FichaBeneficiarioRow | null> {
-    const beneficiario = await BeneficiarioModel.findOne({
-      where: { rut_ben },
-      attributes: [
-        "rut_ben",
-        "nom_ben",
-        "pat_ben",
-        "mat_ben",
-        "dir_ben",
-        "reg_ben",
-        "ciu_ben",
-        "com_ben",
-        "civ_ben",
-        [sequelize.col("region.Nom_region"), "nombre_region"],
-        [sequelize.col("ciudad.nom_ciu"), "nombre_ciudad"],
-        [sequelize.col("comuna.nom_com"), "nombre_comuna"],
-      ],
-      include: INCLUDES_LISTADO,
-      raw: true,
-    });
+    // Busca en ambas tablas (legacy + beneficiarios_proempleo) para que la ficha
+    // funcione también con los beneficiarios creados en la tabla nueva.
+    const filas = await sequelize.query<
+      Omit<
+        FichaBeneficiarioRow,
+        | "ultimo_mes_benpro"
+        | "ultimo_ano_benpro"
+        | "folio_vigente"
+        | "tiene_reemplazo"
+      >
+    >(
+      `SELECT
+        ben.rut_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.dir_ben,
+        ben.reg_ben, ben.ciu_ben, ben.com_ben, ben.civ_ben,
+        r.Nom_region AS nombre_region,
+        c.nom_ciu AS nombre_ciudad,
+        co.nom_com AS nombre_comuna
+      FROM (
+        SELECT b.rut_ben, b.nom_ben, b.pat_ben, b.mat_ben, b.dir_ben,
+               b.reg_ben, b.ciu_ben, b.com_ben, b.civ_ben
+        FROM dbo.BENEFICIARIOS b
+        UNION ALL
+        SELECT p.rutBeneficiario, p.nombres, p.apellidoPaterno, p.apellidoMaterno,
+               p.direccion, p.idRegion, p.idCiudad, p.idComuna, NULL
+        FROM dbo.beneficiarios_proempleo p
+      ) ben
+      LEFT JOIN dbo.REGIONES r ON r.cod_region = ben.reg_ben
+      LEFT JOIN dbo.CIUDADES c ON c.cod_ciu = ben.ciu_ben AND c.estado = 'ACTIVO'
+      LEFT JOIN dbo.COMUNAS co ON co.cod_com = ben.com_ben
+      WHERE ben.rut_ben = :rut`,
+      { type: QueryTypes.SELECT, replacements: { rut: rut_ben } },
+    );
+    const beneficiario = filas[0];
     if (!beneficiario) return null;
 
     const [ultimoBenPro, tieneReemplazo] = await Promise.all([
@@ -561,7 +695,7 @@ export const beneficiarioRepository = {
     ]);
 
     return {
-      ...(beneficiario as unknown as FichaBeneficiarioRow),
+      ...beneficiario,
       ultimo_mes_benpro: ultimoBenPro?.mes_benpro ?? null,
       ultimo_ano_benpro: ultimoBenPro?.ano_BenPro ?? null,
       folio_vigente: (ultimoBenPro?.fol_pro ?? null) as unknown as number,
