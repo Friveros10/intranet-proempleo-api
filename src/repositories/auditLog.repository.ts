@@ -1,5 +1,5 @@
 import { Request } from 'express';
-import { WhereOptions } from 'sequelize';
+import { Transaction, WhereOptions } from 'sequelize';
 import { AuditAccion, AuditLogModel, AuditPerfilNotificacion } from '../models/AuditLog.model';
 
 export interface RegistrarAuditoriaParams {
@@ -11,6 +11,7 @@ export interface RegistrarAuditoriaParams {
   region?: number | null;
   detalle?: string;
   req: Request;
+  transaction?: Transaction;
 }
 
 const ESTADO_POR_PERFIL: Record<AuditPerfilNotificacion, 'estadoAdmin' | 'estadoMinisterio' | 'estadoIntendencia'> = {
@@ -34,7 +35,7 @@ function buildWhereNotificaciones(perfil: AuditPerfilNotificacion, regionUsuario
 }
 
 export const auditLogRepository = {
-  async registrar({ usuarioId, accion, modulo, entidad, registroId, region, detalle, req }: RegistrarAuditoriaParams): Promise<AuditLogModel> {
+  async registrar({ usuarioId, accion, modulo, entidad, registroId, region, detalle, req, transaction }: RegistrarAuditoriaParams): Promise<AuditLogModel> {
     return AuditLogModel.create({
       usuarioId: usuarioId === null ? null : Number(usuarioId),
       accion,
@@ -52,7 +53,7 @@ export const auditLogRepository = {
       fechaVistaAdmin: null,
       fechaVistaMinisterio: null,
       fechaVistaIntendencia: null,
-    });
+    }, { transaction });
   },
 
   async findAll(): Promise<AuditLogModel[]> {
