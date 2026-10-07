@@ -47,7 +47,6 @@ export interface Beneficiario {
   fm_ben: string | null;
   fs_ben: string | null;
   tel_ben: string | null;
-  email_ben: string | null;
   ano_ben: number | null;
   corr_mar: number | null;
   cod_cel_ben: string | null;
@@ -56,8 +55,6 @@ export interface Beneficiario {
   tip_mar: string | null;
   telrec_ben: string | null;
   codtelrec_ben: string | null;
-  status: number;
-  statusFicha: number;
 }
 
 type BeneficiarioCreation = Optional<Beneficiario, 'rut_ben'>;
@@ -108,7 +105,6 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare fm_ben: string | null;
   declare fs_ben: string | null;
   declare tel_ben: string | null;
-  declare email_ben: string | null;
   declare ano_ben: number | null;
   declare corr_mar: number | null;
   declare cod_cel_ben: string | null;
@@ -117,8 +113,6 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare tip_mar: string | null;
   declare telrec_ben: string | null;
   declare codtelrec_ben: string | null;
-  declare status: number;
-  declare statusFicha: number;
 }
 
 BeneficiarioModel.init(
@@ -168,7 +162,6 @@ BeneficiarioModel.init(
     fm_ben: DataTypes.STRING,
     fs_ben: DataTypes.STRING,
     tel_ben: DataTypes.STRING,
-    email_ben: DataTypes.STRING,
     ano_ben: DataTypes.INTEGER,
     corr_mar: DataTypes.INTEGER,
     cod_cel_ben: DataTypes.STRING,
@@ -177,8 +170,6 @@ BeneficiarioModel.init(
     tip_mar: DataTypes.STRING,
     telrec_ben: DataTypes.STRING,
     codtelrec_ben: DataTypes.STRING,
-    status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
-    statusFicha: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 2 },
   },
   { sequelize, tableName: 'BENEFICIARIOS', schema: 'dbo', timestamps: false }
 );

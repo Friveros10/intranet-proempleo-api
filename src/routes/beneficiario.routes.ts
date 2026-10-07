@@ -24,7 +24,7 @@ router.post(
 );
 router.put(
 	'/:rut/completar-ficha',
-	requirePermisos('BEN_CREAR'),
+	requirePermisos('BEN_COMPF'),
 	validate(completarFichaBeneficiarioSchema),
 	asyncHandler(beneficiarioController.completarFicha)
 );

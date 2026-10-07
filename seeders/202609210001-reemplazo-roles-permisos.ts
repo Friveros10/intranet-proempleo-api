@@ -1,7 +1,7 @@
-import { sequelize } from '../src/database/sequelize';
-import { RolSicapModel } from '../src/models/RolSicap.model';
-import { MenuModel } from '../src/models/Menu.model';
-import { RolMenuModel } from '../src/models/RolMenu.model';
+import { sequelize } from "../src/database/sequelize";
+import { RolSicapModel } from "../src/models/RolSicap.model";
+import { MenuModel } from "../src/models/Menu.model";
+import { RolMenuModel } from "../src/models/RolMenu.model";
 
 /**
  * Seeder del módulo de Reemplazo de Beneficiarios de Proyecto.
@@ -31,32 +31,54 @@ interface MenuSeed {
 }
 
 const ROLES: RolSeed[] = [
-  { corr_rol: 100, nom_rol: 'ADMIN', est_rol: 'ACTIVO' },
-  { corr_rol: 101, nom_rol: 'MINISTERIO', est_rol: 'ACTIVO' },
-  { corr_rol: 102, nom_rol: 'INTENDENCIA', est_rol: 'ACTIVO' },
+  { corr_rol: 100, nom_rol: "ADMIN", est_rol: "ACTIVO" },
+  { corr_rol: 101, nom_rol: "MINISTERIO", est_rol: "ACTIVO" },
+  { corr_rol: 102, nom_rol: "INTENDENCIA", est_rol: "ACTIVO" },
 ];
 
 // Permisos (menús) propios de los módulos implementados
 // cod_men está limitado a VARCHAR(10) y Nom_men a VARCHAR(50) en la tabla legacy dbo.menus
 const MENUS_REEMPLAZO: MenuSeed[] = [
-  { cod_men: 'REM_VERALL', Nom_men: 'Reemplazo: ver todos los registros' },
-  { cod_men: 'REM_VERREG', Nom_men: 'Reemplazo: ver registros de su región' },
-  { cod_men: 'REM_CREAR', Nom_men: 'Reemplazo: crear solicitud' },
-  { cod_men: 'REM_APROB', Nom_men: 'Reemplazo: aprobar solicitud' },
-  { cod_men: 'REM_RECHAZ', Nom_men: 'Reemplazo: rechazar solicitud' },
-  { cod_men: 'REM_DOCAPR', Nom_men: 'Reemplazo: aprobar documentos' },
-  { cod_men: 'REM_DOCREC', Nom_men: 'Reemplazo: rechazar documentos' },
-  { cod_men: 'REM_FILTR', Nom_men: 'Reemplazo: filtro por región' },
-  { cod_men: 'BEN_VERALL', Nom_men: 'Beneficiarios: ver todos' },
-  { cod_men: 'BEN_VERCOM', Nom_men: 'Beneficiarios: ver comuna' },
-  { cod_men: 'BEN_CREAR', Nom_men: 'Beneficiarios: crear' },
+  { cod_men: "REM_VERALL", Nom_men: "Reemplazo: ver todos los registros" },
+  { cod_men: "REM_VERREG", Nom_men: "Reemplazo: ver registros de su región" },
+  { cod_men: "REM_CREAR", Nom_men: "Reemplazo: crear solicitud" },
+  { cod_men: "REM_APROB", Nom_men: "Reemplazo: aprobar solicitud" },
+  { cod_men: "REM_RECHAZ", Nom_men: "Reemplazo: rechazar solicitud" },
+  { cod_men: "REM_DOCAPR", Nom_men: "Reemplazo: aprobar documentos" },
+  { cod_men: "REM_DOCREC", Nom_men: "Reemplazo: rechazar documentos" },
+  { cod_men: "REM_FILTR", Nom_men: "Reemplazo: filtro por región" },
+  { cod_men: "BEN_VERALL", Nom_men: "Beneficiarios: ver todos" },
+  { cod_men: "BEN_VERCOM", Nom_men: "Beneficiarios: ver comuna" },
+  { cod_men: "BEN_CREAR", Nom_men: "Beneficiarios: crear" },
+  { cod_men: "BEN_COMPF", Nom_men: "Beneficiarios: completar ficha" },
 ];
 
 // Asignación de permisos por rol (usando los cod_men definidos arriba)
 const PERMISOS_POR_ROL: Record<string, string[]> = {
-  ADMIN: ['REM_VERALL', 'REM_CREAR', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR', 'BEN_VERALL', 'BEN_CREAR'],
-  MINISTERIO: ['REM_VERALL', 'REM_APROB', 'REM_RECHAZ', 'REM_DOCAPR', 'REM_DOCREC', 'REM_FILTR', 'BEN_VERALL', 'BEN_CREAR'],
-  INTENDENCIA: ['REM_VERREG', 'REM_CREAR', 'BEN_VERCOM'],
+  ADMIN: [
+    "REM_VERALL",
+    "REM_CREAR",
+    "REM_APROB",
+    "REM_RECHAZ",
+    "REM_DOCAPR",
+    "REM_DOCREC",
+    "REM_FILTR",
+    "BEN_VERALL",
+    "BEN_CREAR",
+    "BEN_COMPF",
+  ],
+  MINISTERIO: [
+    "REM_VERALL",
+    "REM_APROB",
+    "REM_RECHAZ",
+    "REM_DOCAPR",
+    "REM_DOCREC",
+    "REM_FILTR",
+    "BEN_VERALL",
+    "BEN_CREAR",
+    "BEN_COMPF",
+  ],
+  INTENDENCIA: ["REM_VERREG", "REM_CREAR", "BEN_VERCOM", "BEN_COMPF"],
 };
 
 async function seedRoles(): Promise<void> {
@@ -69,14 +91,19 @@ async function seedMenus(): Promise<Map<string, number>> {
   const codigoACorrMen = new Map<string, number>();
 
   for (const menu of MENUS_REEMPLAZO) {
-    const existente = await MenuModel.findOne({ where: { cod_men: menu.cod_men } });
+    const existente = await MenuModel.findOne({
+      where: { cod_men: menu.cod_men },
+    });
     if (existente) {
       codigoACorrMen.set(menu.cod_men, existente.corr_men);
       continue;
     }
 
     // corr_men es identity en dbo.menus: se omite para que SQL Server lo autogenere
-    const creado = await MenuModel.create({ cod_men: menu.cod_men, Nom_men: menu.Nom_men });
+    const creado = await MenuModel.create({
+      cod_men: menu.cod_men,
+      Nom_men: menu.Nom_men,
+    });
     codigoACorrMen.set(menu.cod_men, creado.corr_men);
   }
 
@@ -91,12 +118,18 @@ async function seedRolMenu(codigoACorrMen: Map<string, number>): Promise<void> {
       const corr_men = codigoACorrMen.get(codigo);
       if (!corr_men) continue;
 
-      const existente = await RolMenuModel.findOne({ where: { corr_rol: rol.corr_rol, corr_men } });
+      const existente = await RolMenuModel.findOne({
+        where: { corr_rol: rol.corr_rol, corr_men },
+      });
       if (existente) continue;
 
       // corr_RolMen es identity en dbo.rol_menu: se omite para que SQL Server lo autogenere
       // acc_RolMen es CHAR(2) NOT NULL en dbo.rol_menu
-      await RolMenuModel.create({ corr_rol: rol.corr_rol, corr_men, acc_RolMen: 'SI' });
+      await RolMenuModel.create({
+        corr_rol: rol.corr_rol,
+        corr_men,
+        acc_RolMen: "SI",
+      });
     }
   }
 }
@@ -113,7 +146,9 @@ export async function down(): Promise<void> {
   const corrMenIds = menus.map((m) => m.corr_men);
   const corrRolIds = ROLES.map((r) => r.corr_rol);
 
-  await RolMenuModel.destroy({ where: { corr_rol: corrRolIds, corr_men: corrMenIds } });
+  await RolMenuModel.destroy({
+    where: { corr_rol: corrRolIds, corr_men: corrMenIds },
+  });
   await MenuModel.destroy({ where: { corr_men: corrMenIds } });
   await RolSicapModel.destroy({ where: { corr_rol: corrRolIds } });
 }
@@ -125,12 +160,17 @@ if (require.main === module) {
     .then(() => up())
     .then(() => {
       // eslint-disable-next-line no-console
-      console.log('Seeder de roles y permisos de Reemplazo ejecutado correctamente.');
+      console.log(
+        "Seeder de roles y permisos de Reemplazo ejecutado correctamente.",
+      );
       return sequelize.close();
     })
     .catch((error) => {
       // eslint-disable-next-line no-console
-      console.error('Error ejecutando el seeder de roles y permisos de Reemplazo:', error);
+      console.error(
+        "Error ejecutando el seeder de roles y permisos de Reemplazo:",
+        error,
+      );
       process.exitCode = 1;
       return sequelize.close();
     });

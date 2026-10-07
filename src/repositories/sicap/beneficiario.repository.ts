@@ -1,9 +1,10 @@
-import { Op, QueryTypes } from "sequelize";
+import { IncludeOptions, Op, WhereOptions } from "sequelize";
 import {
   Beneficiario,
   BeneficiarioModel,
 } from "../../models/Beneficiario.model";
 import { BeneficiarioProempleoModel } from "../../models/BeneficiarioProempleo.model";
+import { BeneficiarioConsulta, BeneficiarioConsultaModel } from "../../models/BeneficiarioConsulta.model";
 import { BenProModel } from "../../models/BenPro.model";
 import { ProyectoModel } from "../../models/Proyecto.model";
 import { RegionModel } from "../../models/Region.model";
@@ -11,6 +12,7 @@ import { CiudadModel } from "../../models/Ciudad.model";
 import { ComunaModel } from "../../models/Comuna.model";
 import { ReemplazoBenProyectoModel } from "../../models/ReemplazoBenProyecto.model";
 import { sequelize } from "../../database/sequelize";
+import { AppError } from "../../utils/AppError";
 import {
   CompletarFichaBeneficiarioInput,
   CrearBeneficiarioInput,
@@ -59,6 +61,7 @@ export interface BeneficiarioListadoRow {
   email_ben: string | null;
   status: number;
   statusFicha: number;
+  origen: "historico" | "proempleo";
 }
 
 export interface ProyectoBeneficiarioRow {
@@ -138,77 +141,78 @@ function fechaIsoLiteral(fechaIso: string) {
   return sequelize.literal(`'${fechaIso}'`);
 }
 
-// Subconsulta que unifica la tabla legacy BENEFICIARIOS con la nueva tabla
-// beneficiarios_proempleo en una misma query. Las columnas descriptivas de la
-// tabla nueva se alinean (alias) a los nombres legacy que consume la API, de
-// modo que ambas tablas entreguen una sola forma de fila.
-const UNION_BENEFICIARIOS_SQL = `
-  SELECT
-    b.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, b.dir_ben,
-    b.reg_ben, b.ciu_ben, b.com_ben,
-    CONVERT(VARCHAR(10), b.fecnac_ben, 23) AS fecnac_ben,
-    b.sex_ben, b.tel_ben, b.cel_ben, b.email_ben, b.status, b.statusFicha
-  FROM dbo.BENEFICIARIOS b
-  UNION ALL
-  SELECT
-    p.rutBeneficiario, p.digitoVerificador, p.nombres, p.apellidoPaterno,
-    p.apellidoMaterno, p.direccion, p.idRegion, p.idCiudad, p.idComuna,
-    CONVERT(VARCHAR(10), p.fechaNacimiento, 23),
-    p.sexo, p.telefono, p.celular, p.email, p.status, p.statusFicha
-  FROM dbo.beneficiarios_proempleo p
-`;
+function incluirCatalogos(): IncludeOptions[] {
+  return [
+    { model: RegionModel, as: "region", attributes: ["Nom_region"], required: false },
+    {
+      model: CiudadModel, as: "ciudad", attributes: ["nom_ciu"],
+      where: { estado: "ACTIVO" }, required: false,
+    },
+    { model: ComunaModel, as: "comuna", attributes: ["nom_com"], required: false },
+  ];
+}
 
-// SELECT del listado unificado: agrega los nombres de región/ciudad/comuna vía
-// LEFT JOIN (fecnac_ben ya viene formateada sin hora desde el UNION).
-const SELECT_LISTADO_SQL = `
-  SELECT
-    ben.rut_ben, ben.dig_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.dir_ben,
-    ben.reg_ben, r.Nom_region AS nombre_region,
-    ben.ciu_ben, c.nom_ciu AS nombre_ciudad,
-    ben.com_ben, co.nom_com AS nombre_comuna,
-    ben.fecnac_ben, ben.sex_ben, ben.tel_ben, ben.cel_ben, ben.email_ben,
-    ben.status, ben.statusFicha
-  FROM (${UNION_BENEFICIARIOS_SQL}) ben
-  LEFT JOIN dbo.REGIONES r ON r.cod_region = ben.reg_ben
-  LEFT JOIN dbo.CIUDADES c ON c.cod_ciu = ben.ciu_ben AND c.estado = 'ACTIVO'
-  LEFT JOIN dbo.COMUNAS co ON co.cod_com = ben.com_ben
-`;
+function mapearListado(model: BeneficiarioConsultaModel): BeneficiarioListadoRow {
+  const ben = model.get();
+  return {
+    rut_ben: ben.rut_ben,
+    dig_ben: ben.dig_ben,
+    nom_ben: ben.nom_ben,
+    pat_ben: ben.pat_ben,
+    mat_ben: ben.mat_ben,
+    dir_ben: ben.dir_ben,
+    reg_ben: ben.reg_ben,
+    ciu_ben: ben.ciu_ben,
+    com_ben: ben.com_ben,
+    nombre_region: model.region?.Nom_region ?? null,
+    nombre_ciudad: model.ciudad?.nom_ciu ?? null,
+    nombre_comuna: model.comuna?.nom_com ?? null,
+    fecnac_ben: ben.fecnac_ben,
+    sex_ben: ben.sex_ben,
+    tel_ben: ben.tel_ben,
+    cel_ben: ben.cel_ben,
+    email_ben: ben.email_ben,
+    status: ben.status,
+    statusFicha: ben.statusFicha,
+    origen: ben.origen,
+  };
+}
 
-// Construye el WHERE del listado unificado (equivalente al antiguo
-// buildBeneficiarioWhere, pero en SQL crudo para poder aplicarse al UNION ALL).
-function buildListadoWhereSql(
+function buildListadoWhere(
   filtros: ListarBeneficiariosQuery,
   regionUsuario?: number | null,
-): { whereSql: string; replacements: Record<string, unknown> } {
-  const condiciones = ["ben.statusFicha > 0", "ben.status > 0"];
-  const replacements: Record<string, unknown> = {};
+): WhereOptions<BeneficiarioConsulta> {
+  const condiciones: WhereOptions<BeneficiarioConsulta>[] = [
+    { statusFicha: { [Op.gt]: 0 }, status: { [Op.gt]: 0 } },
+  ];
 
   if (regionUsuario) {
-    condiciones.push("ben.reg_ben = :regionUsuario");
-    replacements.regionUsuario = regionUsuario;
+    condiciones.push({ reg_ben: regionUsuario });
   } else {
     if (filtros.region) {
-      condiciones.push("ben.reg_ben = :region");
-      replacements.region = filtros.region;
+      condiciones.push({ reg_ben: filtros.region });
     }
     if (filtros.ciudad) {
-      condiciones.push("ben.ciu_ben = :ciudad");
-      replacements.ciudad = filtros.ciudad;
+      condiciones.push({ ciu_ben: filtros.ciudad });
     }
     if (filtros.comuna) {
-      condiciones.push("ben.com_ben = :comuna");
-      replacements.comuna = filtros.comuna;
+      condiciones.push({ com_ben: filtros.comuna });
     }
   }
 
   if (filtros.search) {
-    condiciones.push(
-      "(CAST(ben.rut_ben AS VARCHAR(20)) LIKE :search OR ben.nom_ben LIKE :search OR ben.pat_ben LIKE :search OR ben.mat_ben LIKE :search)",
-    );
-    replacements.search = `%${filtros.search}%`;
+    const search = { [Op.like]: `%${filtros.search}%` };
+    condiciones.push({
+      [Op.or]: [
+        sequelize.where(sequelize.cast(sequelize.col("BeneficiarioConsultaModel.rut_ben"), "VARCHAR(20)"), search),
+        { nom_ben: search },
+        { pat_ben: search },
+        { mat_ben: search },
+      ],
+    });
   }
 
-  return { whereSql: condiciones.join(" AND "), replacements };
+  return { [Op.and]: condiciones };
 }
 
 // Normaliza un registro de beneficiarios_proempleo a la forma legacy (interfaz
@@ -260,7 +264,6 @@ function mapearProempleoALegacy(p: BeneficiarioProempleoModel): Beneficiario {
     fm_ben: null,
     fs_ben: null,
     tel_ben: p.telefono,
-    email_ben: p.email,
     ano_ben: null,
     corr_mar: null,
     cod_cel_ben: null,
@@ -269,8 +272,6 @@ function mapearProempleoALegacy(p: BeneficiarioProempleoModel): Beneficiario {
     tip_mar: null,
     telrec_ben: null,
     codtelrec_ben: null,
-    status: p.status,
-    statusFicha: p.statusFicha,
   };
 }
 
@@ -294,11 +295,12 @@ export const beneficiarioRepository = {
   async findListadoByRut(
     rut_ben: number,
   ): Promise<BeneficiarioListadoRow | null> {
-    const rows = await sequelize.query<BeneficiarioListadoRow>(
-      `${SELECT_LISTADO_SQL} WHERE ben.rut_ben = :rut`,
-      { type: QueryTypes.SELECT, replacements: { rut: rut_ben } },
-    );
-    return rows[0] ?? null;
+    const row = await BeneficiarioConsultaModel.findOne({
+      where: { rut_ben },
+      include: incluirCatalogos(),
+      order: [["origen", "DESC"]],
+    });
+    return row ? mapearListado(row) : null;
   },
 
   // Resuelve los datos básicos de beneficiarios en ambas tablas (legacy +
@@ -309,13 +311,19 @@ export const beneficiarioRepository = {
     if (ruts.length === 0) {
       return new Map();
     }
-    const rows = await sequelize.query<BeneficiarioResumenRow>(
-      `SELECT ben.rut_ben, ben.dig_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.fecnac_ben
-       FROM (${UNION_BENEFICIARIOS_SQL}) ben
-       WHERE ben.rut_ben IN (:ruts)`,
-      { type: QueryTypes.SELECT, replacements: { ruts } },
-    );
-    return new Map(rows.map((row) => [row.rut_ben, row]));
+    const rows = await BeneficiarioConsultaModel.findAll({
+      attributes: ["rut_ben", "dig_ben", "nom_ben", "pat_ben", "mat_ben", "fecnac_ben"],
+      where: { rut_ben: { [Op.in]: ruts } },
+      order: [["origen", "ASC"]],
+    });
+    return new Map(rows.map((row) => {
+      const ben = row.get();
+      const resumen: BeneficiarioResumenRow = {
+        rut_ben: ben.rut_ben, dig_ben: ben.dig_ben, nom_ben: ben.nom_ben,
+        pat_ben: ben.pat_ben, mat_ben: ben.mat_ben, fecnac_ben: ben.fecnac_ben,
+      };
+      return [ben.rut_ben, resumen];
+    }));
   },
 
   async findAllListado(
@@ -325,31 +333,21 @@ export const beneficiarioRepository = {
     const page = filtros.page;
     const limit = 50;
     const offset = (page - 1) * limit;
-    const { whereSql, replacements } = buildListadoWhereSql(
-      filtros,
-      regionUsuario,
-    );
+    const where = buildListadoWhere(filtros, regionUsuario);
 
-    const [rows, totalRows] = await Promise.all([
-      sequelize.query<BeneficiarioListadoRow>(
-        `${SELECT_LISTADO_SQL}
-         WHERE ${whereSql}
-         ORDER BY ben.statusFicha ASC
-         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`,
-        {
-          type: QueryTypes.SELECT,
-          replacements: { ...replacements, offset, limit },
-        },
-      ),
-      sequelize.query<{ total: number }>(
-        `SELECT COUNT(*) AS total FROM (${UNION_BENEFICIARIOS_SQL}) ben WHERE ${whereSql}`,
-        { type: QueryTypes.SELECT, replacements },
-      ),
+    const [rows, total] = await Promise.all([
+      BeneficiarioConsultaModel.findAll({
+        where,
+        include: incluirCatalogos(),
+        order: [["origen", "DESC"], ["statusFicha", "ASC"], ["rut_ben", "ASC"]],
+        offset,
+        limit,
+      }),
+      BeneficiarioConsultaModel.count({ where }),
     ]);
 
-    const total = totalRows[0]?.total ?? 0;
     return {
-      data: rows,
+      data: rows.map(mapearListado),
       pagination: {
         page,
         limit,
@@ -533,9 +531,9 @@ export const beneficiarioRepository = {
     return creado;
   },
 
-  // Elimina lógicamente en la tabla que contenga al beneficiario: primero se
-  // intenta en beneficiarios_proempleo y, si no está ahí, en BENEFICIARIOS.
+  // BENEFICIARIOS es historica: las escrituras solo usan beneficiarios_proempleo.
   async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
+    await this.findProempleoEditable(rut_ben);
     const [afectadosProempleo] = await BeneficiarioProempleoModel.update(
       {
         status: -1,
@@ -544,67 +542,50 @@ export const beneficiarioRepository = {
       },
       { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } } },
     );
-    if (afectadosProempleo > 0) {
-      return afectadosProempleo;
-    }
-    const [afectadosLegacy] = await BeneficiarioModel.update(
-      {
-        status: -1,
-        usu_eli,
-        fec_eli: sequelize.fn("GETDATE") as unknown as Date,
-      },
-      { where: { rut_ben, status: { [Op.gt]: 0 } } },
-    );
-    return afectadosLegacy ?? 0;
+    return afectadosProempleo;
   },
 
-  // Actualiza la ficha en la tabla que contenga al beneficiario: si existe en
-  // beneficiarios_proempleo se usa el modelo nuevo; si no, la tabla legacy.
+  async findProempleoEditable(rut_ben: number): Promise<BeneficiarioProempleoModel> {
+    const proempleo = await BeneficiarioProempleoModel.findOne({
+      where: { rutBeneficiario: rut_ben },
+    });
+    if (!proempleo) {
+      const historico = await BeneficiarioModel.findByPk(rut_ben);
+      if (historico) {
+        throw new AppError("Los beneficiarios historicos son de solo lectura", 403);
+      }
+      throw new AppError("Beneficiario no encontrado", 404);
+    }
+    return proempleo;
+  },
+
   async completarFicha(
     rut_ben: number,
     data: CompletarFichaBeneficiarioInput,
     usu_mod: string,
-  ): Promise<BeneficiarioModel | BeneficiarioProempleoModel> {
-    const proempleo = await BeneficiarioProempleoModel.findOne({
-      where: { rutBeneficiario: rut_ben },
-    });
-    if (proempleo) {
-      await BeneficiarioProempleoModel.update(
-        {
-          idCiudad: data.ciudad,
-          idComuna: data.comuna,
-          idRegion: data.region,
-          direccion: data.direccion ?? null,
-          telefono: data.telefono ?? null,
-          celular: data.celular ?? null,
-          email: data.email_ben ?? null,
-          statusFicha: 2,
-          usuarioModificacion: usu_mod,
-          fechaModificacion: sequelize.fn("GETDATE") as unknown as Date,
-        },
-        { where: { rutBeneficiario: rut_ben } },
-      );
-      return (await BeneficiarioProempleoModel.findOne({
-        where: { rutBeneficiario: rut_ben },
-      })) as BeneficiarioProempleoModel;
+  ): Promise<void> {
+    const proempleo = await this.findProempleoEditable(rut_ben);
+    if (proempleo.status <= 0) {
+      throw new AppError("El beneficiario ya se encuentra eliminado", 409);
     }
-
-    await BeneficiarioModel.update(
+    const [afectados] = await BeneficiarioProempleoModel.update(
       {
-        ciu_ben: data.ciudad,
-        com_ben: data.comuna,
-        reg_ben: data.region,
-        dir_ben: data.direccion ?? null,
-        tel_ben: data.telefono ?? null,
-        cel_ben: data.celular ?? null,
-        email_ben: data.email_ben ?? null,
+        idCiudad: data.ciudad,
+        idComuna: data.comuna,
+        idRegion: data.region,
+        direccion: data.direccion ?? null,
+        telefono: data.telefono ?? null,
+        celular: data.celular ?? null,
+        email: data.email_ben ?? null,
         statusFicha: 2,
-        usu_mod,
-        fec_mod: sequelize.fn("GETDATE") as unknown as Date,
+        usuarioModificacion: usu_mod,
+        fechaModificacion: sequelize.fn("GETDATE") as unknown as Date,
       },
-      { where: { rut_ben } },
+      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } } },
     );
-    return BeneficiarioModel.findByPk(rut_ben) as Promise<BeneficiarioModel>;
+    if (afectados === 0) {
+      throw new AppError("El beneficiario ya se encuentra eliminado", 409);
+    }
   },
 
   async listarRegiones(): Promise<CatalogoRegionRow[]> {
@@ -644,40 +625,14 @@ export const beneficiarioRepository = {
   async findByRutFromBenPro(
     rut_ben: number,
   ): Promise<FichaBeneficiarioRow | null> {
-    // Busca en ambas tablas (legacy + beneficiarios_proempleo) para que la ficha
-    // funcione también con los beneficiarios creados en la tabla nueva.
-    const filas = await sequelize.query<
-      Omit<
-        FichaBeneficiarioRow,
-        | "ultimo_mes_benpro"
-        | "ultimo_ano_benpro"
-        | "folio_vigente"
-        | "tiene_reemplazo"
-      >
-    >(
-      `SELECT
-        ben.rut_ben, ben.nom_ben, ben.pat_ben, ben.mat_ben, ben.dir_ben,
-        ben.reg_ben, ben.ciu_ben, ben.com_ben, ben.civ_ben,
-        r.Nom_region AS nombre_region,
-        c.nom_ciu AS nombre_ciudad,
-        co.nom_com AS nombre_comuna
-      FROM (
-        SELECT b.rut_ben, b.nom_ben, b.pat_ben, b.mat_ben, b.dir_ben,
-               b.reg_ben, b.ciu_ben, b.com_ben, b.civ_ben
-        FROM dbo.BENEFICIARIOS b
-        UNION ALL
-        SELECT p.rutBeneficiario, p.nombres, p.apellidoPaterno, p.apellidoMaterno,
-               p.direccion, p.idRegion, p.idCiudad, p.idComuna, NULL
-        FROM dbo.beneficiarios_proempleo p
-      ) ben
-      LEFT JOIN dbo.REGIONES r ON r.cod_region = ben.reg_ben
-      LEFT JOIN dbo.CIUDADES c ON c.cod_ciu = ben.ciu_ben AND c.estado = 'ACTIVO'
-      LEFT JOIN dbo.COMUNAS co ON co.cod_com = ben.com_ben
-      WHERE ben.rut_ben = :rut`,
-      { type: QueryTypes.SELECT, replacements: { rut: rut_ben } },
-    );
-    const beneficiario = filas[0];
-    if (!beneficiario) return null;
+    const registro = await BeneficiarioConsultaModel.findOne({
+      where: { rut_ben },
+      include: incluirCatalogos(),
+      order: [["origen", "DESC"]],
+    });
+    if (!registro) return null;
+    const ben = registro.get();
+    const beneficiario = mapearListado(registro);
 
     const [ultimoBenPro, tieneReemplazo] = await Promise.all([
       BenProModel.findOne({
@@ -695,7 +650,21 @@ export const beneficiarioRepository = {
     ]);
 
     return {
-      ...beneficiario,
+      rut_ben: ben.rut_ben,
+      nom_ben: ben.nom_ben,
+      pat_ben: ben.pat_ben,
+      mat_ben: ben.mat_ben,
+      dir_ben: ben.dir_ben,
+      reg_ben: ben.reg_ben,
+      ciu_ben: ben.ciu_ben,
+      com_ben: ben.com_ben,
+      civ_ben: ben.civ_ben,
+      sex_ben: ben.sex_ben,
+      est_ben: ben.est_ben,
+      etn_ben: ben.etn_ben,
+      nombre_region: beneficiario.nombre_region,
+      nombre_ciudad: beneficiario.nombre_ciudad,
+      nombre_comuna: beneficiario.nombre_comuna,
       ultimo_mes_benpro: ultimoBenPro?.mes_benpro ?? null,
       ultimo_ano_benpro: ultimoBenPro?.ano_BenPro ?? null,
       folio_vigente: (ultimoBenPro?.fol_pro ?? null) as unknown as number,

@@ -1,4 +1,5 @@
 import { BeneficiarioModel } from '../models/Beneficiario.model';
+import { BeneficiarioConsultaModel } from '../models/BeneficiarioConsulta.model';
 import { ProyectoModel } from '../models/Proyecto.model';
 import { BenProModel } from '../models/BenPro.model';
 import { UsuarioSicapModel } from '../models/UsuarioSicap.model';
@@ -34,6 +35,10 @@ export function registrarAsociaciones(): void {
   BeneficiarioModel.belongsTo(RegionModel, { foreignKey: 'reg_ben', targetKey: 'cod_region', as: 'region' });
   BeneficiarioModel.belongsTo(CiudadModel, { foreignKey: 'ciu_ben', targetKey: 'cod_ciu', as: 'ciudad' });
   BeneficiarioModel.belongsTo(ComunaModel, { foreignKey: 'com_ben', targetKey: 'cod_com', as: 'comuna' });
+
+  BeneficiarioConsultaModel.belongsTo(RegionModel, { foreignKey: 'reg_ben', targetKey: 'cod_region', as: 'region', constraints: false });
+  BeneficiarioConsultaModel.belongsTo(CiudadModel, { foreignKey: 'ciu_ben', targetKey: 'cod_ciu', as: 'ciudad', constraints: false });
+  BeneficiarioConsultaModel.belongsTo(ComunaModel, { foreignKey: 'com_ben', targetKey: 'cod_com', as: 'comuna', constraints: false });
 
   // Usuario <-> roles
   RolSicapModel.hasMany(UsuarioSicapModel, { foreignKey: 'corr_rol', sourceKey: 'corr_rol', as: 'usuarios' });

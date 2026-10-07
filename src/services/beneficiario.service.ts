@@ -18,6 +18,7 @@ import {
 const PERMISO_VER_TODAS_REGIONES = "REM_VERALL";
 const PERMISO_BEN_VER_TODOS = "BEN_VERALL";
 const PERMISO_BEN_CREAR = "BEN_CREAR";
+const PERMISO_BEN_COMPLETAR_FICHA = "BEN_COMPF";
 
 // Convierte un RUT formateado ("11.111.111-1" o "11111111-1") al cuerpo numérico, descartando el dígito verificador
 function limpiarRut(rutFormateado: string): number {
@@ -127,7 +128,7 @@ export const beneficiarioService = {
   ) {
     const permisos =
       await usuarioSicapRepository.getPermisosDeUsuario(rutUsuario);
-    if (!permisos.includes(PERMISO_BEN_CREAR)) {
+    if (!permisos.includes(PERMISO_BEN_COMPLETAR_FICHA)) {
       throw new AppError("No tiene permisos para completar la ficha", 403);
     }
 

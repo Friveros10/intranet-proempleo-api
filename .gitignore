@@ -5,6 +5,7 @@ dist/
 .DS_Store
 coverage/
 uploads/
+storage/documentos-auditoria/
 *.md
 cookies.txt
 .env.example
