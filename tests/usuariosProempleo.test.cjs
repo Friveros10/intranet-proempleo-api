@@ -14,7 +14,7 @@ const { usuarioSicapRepository: repository } = require('../src/repositories/sica
 const { usuarioService: service } = require('../src/services/usuario.service');
 const { registrarAsociaciones } = require('../src/database/sicapAssociations');
 const schemas = require('../src/validations/usuario.validation');
-const migration = require('../migrations/202610070003-create-usuarios-proempleo');
+const migration = require('../migrations/202610070003-create-users-proempleo');
 
 registrarAsociaciones();
 afterEach(() => mock.restoreAll());
@@ -49,17 +49,17 @@ test('tabla y modelo contienen exactamente los 23 campos, tipos y nulabilidad de
   let columns;
   await migration.up({
     createTable: async (table, fields) => {
-      assert.deepEqual(table, { tableName: 'usuarios_proempleo', schema: 'dbo' });
+      assert.deepEqual(table, { tableName: 'users_proempleo', schema: 'dbo' });
       columns = fields;
     },
   });
   verifyColumns(columns);
   verifyColumns(UsuarioSicapModel.getAttributes());
-  assert.equal(UsuarioSicapModel.tableName, 'usuarios_proempleo');
+  assert.equal(UsuarioSicapModel.tableName, 'users_proempleo');
   assert.equal(UsuarioSicapModel.options.timestamps, false);
   const generator = sequelize.getQueryInterface().queryGenerator;
   const sql = generator.createTableQuery(
-    { tableName: 'usuarios_proempleo', schema: 'dbo' },
+    { tableName: 'users_proempleo', schema: 'dbo' },
     generator.attributesToSQL(columns),
     {},
   );
@@ -69,36 +69,26 @@ test('tabla y modelo contienen exactamente los 23 campos, tipos y nulabilidad de
   assert.doesNotMatch(sql, /NVARCHAR|DATETIMEOFFSET|IDENTITY/);
 });
 
-test('rollback elimina exclusivamente usuarios_proempleo', async () => {
+test('rollback elimina exclusivamente users_proempleo', async () => {
   let dropped;
   await migration.down({ dropTable: async (table) => { dropped = table; } });
-  assert.deepEqual(dropped, { tableName: 'usuarios_proempleo', schema: 'dbo' });
+  assert.deepEqual(dropped, { tableName: 'users_proempleo', schema: 'dbo' });
 });
 
-test('migracion retira exclusivamente FK legacy de solicitante sin modificar registros', async () => {
-  const fkMigration = require('../migrations/202610070004-drop-legacy-usuario-reemplazo-fk');
-  const tx = {};
-  const removed = [];
-  let sql;
-  await fkMigration.up({
-    sequelize: {
-      transaction: async (callback) => callback(tx),
-      query: async (query, options) => {
-        sql = query;
-        assert.equal(options.transaction, tx);
-        return [{ constraintName: 'FK_test' }];
-      },
-    },
-    removeConstraint: async (table, name, options) => {
-      assert.equal(options.transaction, tx);
-      removed.push({ table, name });
+test('reemplazo no declara FK legacy y la asociacion de solicitante queda sin constraints', async () => {
+  const reemplazoMigration = require('../migrations/202609150001-create-reemplazo-benpro');
+  let fields;
+  await reemplazoMigration.up({
+    createTable: async (table, columns) => {
+      assert.deepEqual(table, { tableName: 'Reemplazo_benpro', schema: 'dbo' });
+      fields = columns;
     },
   });
-  assert.match(sql, /tp\.name = 'Reemplazo_benpro'/);
-  assert.match(sql, /pc\.name = 'rutUsuarioSolicitante'/);
-  assert.match(sql, /tr\.name = 'Usuario'/);
-  assert.match(sql, /cr\.name = 'rut_usu'/);
-  assert.deepEqual(removed, [{ table: { tableName: 'Reemplazo_benpro', schema: 'dbo' }, name: 'FK_test' }]);
+  // Ninguna columna debe referenciar tablas legacy (BENEFICIARIOS, PROYECTOS, Usuario)
+  for (const [name, definition] of Object.entries(fields)) {
+    assert.equal(definition.references, undefined, name);
+  }
+  assert.ok(fields.rutUsuarioSolicitante);
   const { ReemplazoBenProyectoModel } = require('../src/models/ReemplazoBenProyecto.model');
   assert.equal(ReemplazoBenProyectoModel.associations.usuarioSolicitante.target, UsuarioSicapModel);
   assert.equal(ReemplazoBenProyectoModel.associations.usuarioSolicitante.options.constraints, false);
@@ -111,9 +101,9 @@ test('login, listados y perfil consultan tabla nueva con asociaciones existentes
   await repository.findAllPerfilesValidos();
   for (const call of query.mock.calls) {
     const sql = call.arguments[0];
-    assert.match(sql, /\[dbo\]\.\[usuarios_proempleo\]/);
+    assert.match(sql, /\[dbo\]\.\[users_proempleo\]/);
     assert.doesNotMatch(sql, /\[dbo\]\.\[Usuario\]/);
-    assert.match(sql, /LEFT OUTER JOIN \[dbo\]\.\[roles\]/);
+    assert.match(sql, /LEFT OUTER JOIN \[dbo\]\.\[ROLES_proempleo\]/);
   }
 });
 

@@ -92,5 +92,5 @@ UsuarioSicapModel.init(
     est_usu: { type: 'VARCHAR(15)', allowNull: true },
     fec_cad_pass: { type: 'DATETIME', allowNull: true },
   },
-  { sequelize, tableName: 'usuarios_proempleo', schema: 'dbo', timestamps: false }
+  { sequelize, tableName: 'users_proempleo', schema: 'dbo', timestamps: false }
 );

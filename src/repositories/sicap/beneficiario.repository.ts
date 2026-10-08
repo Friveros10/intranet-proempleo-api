@@ -461,7 +461,7 @@ export const beneficiarioRepository = {
     return this.findProyectosByRut(rut_ben);
   },
 
-  async create(data: {
+  async createProempleo(data: {
     rut_ben: number;
     dig_ben: string;
     nom_ben: string;

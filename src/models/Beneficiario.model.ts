@@ -115,6 +115,10 @@ export class BeneficiarioModel extends Model<Beneficiario, BeneficiarioCreation>
   declare codtelrec_ben: string | null;
 }
 
+function rechazarEscrituraLegacy(): never {
+  throw new Error('La tabla legacy BENEFICIARIOS es de solo lectura');
+}
+
 BeneficiarioModel.init(
   {
     rut_ben: { type: DataTypes.INTEGER, primaryKey: true },
@@ -171,5 +175,17 @@ BeneficiarioModel.init(
     telrec_ben: DataTypes.STRING,
     codtelrec_ben: DataTypes.STRING,
   },
-  { sequelize, tableName: 'BENEFICIARIOS', schema: 'dbo', timestamps: false }
+  {
+    sequelize,
+    tableName: 'BENEFICIARIOS',
+    schema: 'dbo',
+    timestamps: false,
+    hooks: {
+      beforeSave: rechazarEscrituraLegacy,
+      beforeBulkCreate: rechazarEscrituraLegacy,
+      beforeBulkUpdate: rechazarEscrituraLegacy,
+      beforeBulkDestroy: rechazarEscrituraLegacy,
+      beforeUpsert: rechazarEscrituraLegacy,
+    },
+  }
 );

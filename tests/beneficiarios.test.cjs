@@ -22,7 +22,6 @@ const { beneficiarioRepository: repository } = require('../src/repositories/sica
 const { beneficiarioService: service } = require('../src/services/beneficiario.service');
 const { usuarioSicapRepository: usuarios } = require('../src/repositories/sicap/usuarioSicap.repository');
 const { auditLogRepository: audit } = require('../src/repositories/auditLog.repository');
-const migration = require('../migrations/202610070001-remove-legacy-beneficiario-fields');
 const createMigration = require('../migrations/202610050001-create-beneficiarios-proempleo');
 const viewMigration = require('../migrations/202610070002-create-beneficiarios-consulta-view');
 
@@ -181,23 +180,26 @@ test('modelo de vista usa clave compuesta y bloquea operaciones de escritura', a
   assert.equal(query.mock.callCount(), 0);
 });
 
-test('migracion crea UNION ALL en vista con constantes, fechas ISO y campos de ficha', async () => {
+test('migracion crea UNION ALL con textos tipados sin conversion numerica de celulares', async () => {
   const queries = [];
-  const qi = { sequelize: { query: async (sql) => queries.push(sql) } };
+  const qi = { sequelize: { query: async (sql) => {
+    if (sql.includes("OBJECT_ID('dbo.BENEFICIARIOS'")) return [{ existe: 1 }];
+    queries.push(sql);
+    return [];
+  } } };
   await viewMigration.up(qi);
-  assert.match(queries[0], /CREATE VIEW dbo\.beneficiarios_consulta AS/);
-  assert.match(queries[0], /UNION ALL/);
-  assert.match(queries[0], /CAST\(' ' AS VARCHAR\(255\)\) AS email_ben/);
-  assert.match(queries[0], /1 AS status, 2 AS statusFicha/);
-  assert.match(queries[0], /b\.civ_ben/);
-  assert.match(queries[0], /b\.sex_ben, b\.est_ben, b\.etn_ben/);
-  assert.match(queries[0], /p\.sexo, NULL, p\.etnia/);
-  assert.match(queries[0], /CONVERT\(VARCHAR\(10\), b\.fecnac_ben, 23\)/);
-  assert.match(queries[0], /CONVERT\(VARCHAR\(10\), p\.fechaNacimiento, 23\)/);
-  assert.match(queries[0], /p\.email, p\.status, p\.statusFicha/);
-  assert.doesNotMatch(queries[0], /b\.(?:email_ben|email|status|statusFicha)\b/);
+  assert.match(queries[0], /DROP VIEW dbo\.beneficiarios_consulta/);
+  assert.match(queries[1], /CREATE VIEW dbo\.beneficiarios_consulta AS/);
+  assert.match(queries[1], /UNION ALL/);
+  assert.match(queries[1], /CAST\(b\.cel_ben AS NVARCHAR\(255\)\) AS cel_ben/);
+  assert.match(queries[1], /CAST\(p\.celular AS NVARCHAR\(255\)\) AS cel_ben/);
+  assert.match(queries[1], /CAST\(' ' AS NVARCHAR\(255\)\) AS email_ben/);
+  assert.match(queries[1], /1 AS status, 2 AS statusFicha/);
+  assert.match(queries[1], /CONVERT\(VARCHAR\(10\), b\.fecnac_ben, 23\)/);
+  assert.match(queries[1], /CONVERT\(VARCHAR\(10\), p\.fechaNacimiento, 23\)/);
+  assert.doesNotMatch(queries[1], /b\.(?:email_ben|email|status|statusFicha)\b/);
   await viewMigration.down(qi);
-  assert.equal(queries[1], 'DROP VIEW dbo.beneficiarios_consulta');
+  assert.match(queries[2], /DROP VIEW dbo\.beneficiarios_consulta/);
 });
 
 test('consulta por RUT mantiene lectura de historicos sin campos retirados', async () => {
@@ -362,46 +364,7 @@ test('alta completa se mantiene exclusivamente en ProEmpleo', async () => {
   assert.equal(oldCreate.mock.callCount(), 0);
 });
 
-function migrationInterface(columns) {
-  const tx = { test: true };
-  const removed = [];
-  const added = [];
-  const qi = {
-    sequelize: { transaction: async (callback) => callback(tx) },
-    describeTable: async (table, options) => {
-      assert.deepEqual(table, { tableName: 'BENEFICIARIOS', schema: 'dbo' });
-      assert.equal(options.transaction, tx);
-      return columns;
-    },
-    removeColumn: async (table, name, options) => {
-      assert.equal(table.tableName, 'BENEFICIARIOS');
-      assert.equal(options.transaction, tx);
-      removed.push(name);
-    },
-    addColumn: async (table, name, definition, options) => {
-      assert.equal(table.tableName, 'BENEFICIARIOS');
-      assert.equal(options.transaction, tx);
-      added.push({ name, definition });
-    },
-  };
-  return { qi, removed, added };
-}
-
-test('migracion retira solo campos legacy existentes dentro de transaccion', async () => {
-  const { qi, removed } = migrationInterface({ status: {}, statusFicha: {}, email_ben: {}, email: {}, rut_ben: {} });
-  await migration.up(qi);
-  assert.deepEqual(removed, ['status', 'statusFicha', 'email_ben', 'email']);
-  const empty = migrationInterface({ rut_ben: {} });
-  await migration.up(empty.qi);
-  assert.deepEqual(empty.removed, []);
-});
-
-test('rollback restaura esquema legacy conocido y migracion propia conserva campos', async () => {
-  const { qi, added } = migrationInterface({ rut_ben: {} });
-  await migration.down(qi);
-  assert.deepEqual(added.map((field) => field.name), ['status', 'statusFicha', 'email_ben']);
-  assert.equal(added[0].definition.defaultValue, 1);
-  assert.equal(added[1].definition.defaultValue, 2);
+test('migracion propia conserva los campos de estado y contacto', async () => {
   let fields;
   await createMigration.up({ createTable: async (table, columns) => {
     assert.equal(table.tableName, 'beneficiarios_proempleo');
@@ -410,4 +373,39 @@ test('rollback restaura esquema legacy conocido y migracion propia conserva camp
   assert.ok(fields.email);
   assert.equal(fields.status.defaultValue, 1);
   assert.equal(fields.statusFicha.defaultValue, 2);
+});
+
+test('alta de reemplazo escribe exclusivamente en beneficiarios_proempleo', async () => {
+  const oldCreate = mock.method(legacy, 'create', async () => assert.fail('Alta legacy'));
+  const create = mock.method(proempleo, 'create', async (data) => data);
+  await repository.createProempleo({
+    rut_ben: rut,
+    dig_ben: '5',
+    nom_ben: 'Ana',
+    pat_ben: 'Perez',
+    mat_ben: 'Soto',
+    dir_ben: 'Direccion',
+    reg_ben: 8,
+    fecnac_ben: '01-01-1990',
+    sex_ben: '2',
+    etn_ben: null,
+    nivedu_ben: null,
+    usu_cre: '99',
+    fec_cre: new Date(),
+    statusFicha: 1,
+  });
+  const data = create.mock.calls[0].arguments[0];
+  assert.equal(data.rutBeneficiario, rut);
+  assert.equal(data.status, 1);
+  assert.equal(data.statusFicha, 1);
+  assert.equal(data.usuarioCreacion, '99');
+  assert.equal(oldCreate.mock.callCount(), 0);
+});
+
+test('modelo legacy bloquea cualquier escritura antes de consultar SQL Server', async () => {
+  const query = mock.method(sequelize, 'query', async () => assert.fail('Escritura legacy'));
+  await assert.rejects(legacy.create({ rut_ben: rut }), /solo lectura/);
+  await assert.rejects(legacy.update({ nom_ben: 'Cambio' }, { where: { rut_ben: rut } }), /solo lectura/);
+  await assert.rejects(legacy.destroy({ where: { rut_ben: rut } }), /solo lectura/);
+  assert.equal(query.mock.callCount(), 0);
 });

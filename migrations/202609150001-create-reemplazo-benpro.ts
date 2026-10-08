@@ -4,7 +4,7 @@ import { DataTypes, QueryInterface } from 'sequelize';
 //
 // No declara claves foráneas hacia tablas legacy (BENEFICIARIOS, PROYECTOS,
 // Usuario): el beneficiario puede existir solo en dbo.beneficiarios_proempleo y
-// el solicitante vive en dbo.usuarios_proempleo. La integridad se valida en la
+// el solicitante vive en dbo.users_proempleo. La integridad se valida en la
 // capa de aplicación, igual que en los modelos Sequelize.
 const table = { tableName: 'Reemplazo_benpro', schema: 'dbo' };
 

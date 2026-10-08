@@ -1,6 +1,6 @@
 import { DataTypes, QueryInterface } from 'sequelize';
 
-const table = { tableName: 'usuarios_proempleo', schema: 'dbo' };
+const table = { tableName: 'users_proempleo', schema: 'dbo' };
 
 export async function up(queryInterface: QueryInterface): Promise<void> {
   await queryInterface.createTable(table, {

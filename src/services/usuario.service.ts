@@ -164,7 +164,7 @@ export const usuarioService = {
       throw new AppError("La contraseña actual no es correcta", 400);
     }
 
-    // Se conserva el formato de clave legacy en dbo.usuarios_proempleo.
+    // Se conserva el formato de clave legacy en dbo.users_proempleo.
     await usuarioSicapRepository.cambiarClave(rutUsuario, data.claveNueva);
   },
 };

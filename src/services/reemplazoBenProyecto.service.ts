@@ -279,7 +279,7 @@ export const reemplazoBenProyectoService = {
       );
       if (!beneficiarioNuevoExistente) {
         // console.log("[reemplazoBenProyectoService.crear] beneficiario no existe, creando:", candidato.beneficiario);
-        await beneficiarioRepository.create({
+        await beneficiarioRepository.createProempleo({
           rut_ben: candidato.cuerpo,
           dig_ben: candidato.dv,
           nom_ben: candidato.beneficiario.nombres,
