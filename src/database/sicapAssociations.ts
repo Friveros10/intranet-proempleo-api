@@ -77,6 +77,7 @@ export function registrarAsociaciones(): void {
     foreignKey: 'rutUsuarioSolicitante',
     targetKey: 'rut_usu',
     as: 'usuarioSolicitante',
+    constraints: false,
   });
 
   // Doc_reemplazo_benpro <-> Reemplazo_benpro / Beneficiarios

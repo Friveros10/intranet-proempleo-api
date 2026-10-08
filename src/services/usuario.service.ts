@@ -51,11 +51,12 @@ function generarClaveTemporal(
 }
 
 async function generarLoginUnico(base: string): Promise<string> {
-  let candidato = base;
+  let candidato = base.slice(0, 50);
   let sufijo = 1;
   while (await usuarioSicapRepository.existeLogin(candidato)) {
     sufijo += 1;
-    candidato = `${base}${sufijo}`;
+    const textoSufijo = String(sufijo);
+    candidato = `${base.slice(0, 50 - textoSufijo.length)}${textoSufijo}`;
   }
   return candidato;
 }
@@ -163,7 +164,7 @@ export const usuarioService = {
       throw new AppError("La contraseña actual no es correcta", 400);
     }
 
-    // Se guarda en texto plano por ahora, siguiendo el esquema legacy de dbo.Usuario
+    // Se conserva el formato de clave legacy en dbo.usuarios_proempleo.
     await usuarioSicapRepository.cambiarClave(rutUsuario, data.claveNueva);
   },
 };

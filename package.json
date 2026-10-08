@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit",
     "test:auditoria": "node -r ts-node/register/transpile-only --test tests/documentosAuditoria.test.cjs",
     "test:beneficiarios": "node -r ts-node/register/transpile-only --test tests/beneficiarios.test.cjs",
+    "test:usuarios": "node -r ts-node/register/transpile-only --test tests/usuariosProempleo.test.cjs",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts"
