@@ -1,4 +1,21 @@
-import { DataTypes, QueryInterface } from 'sequelize';
+import { DataTypes, QueryInterface, QueryTypes } from 'sequelize';
+
+// Tabla propia de auditoría. No toca ninguna tabla legacy: usuarioId y region se
+// guardan como enteros sueltos, sin claves foráneas.
+async function existeIndice(
+  queryInterface: QueryInterface,
+  tabla: string,
+  indice: string,
+): Promise<boolean> {
+  const [row] = await queryInterface.sequelize.query<{ existe: number }>(
+    `SELECT CASE WHEN EXISTS (
+       SELECT 1 FROM sys.indexes
+       WHERE name = '${indice}' AND object_id = OBJECT_ID('dbo.${tabla}')
+     ) THEN 1 ELSE 0 END AS existe`,
+    { type: QueryTypes.SELECT },
+  );
+  return row.existe === 1;
+}
 
 export async function up(queryInterface: QueryInterface): Promise<void> {
   await queryInterface.createTable(
@@ -81,11 +98,14 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     }
   );
 
-  await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, ['fecha']);
-  await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, ['region']);
-  await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, ['estadoAdmin']);
-  await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, ['estadoMinisterio']);
-  await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, ['estadoIntendencia']);
+  for (const campo of ['fecha', 'region', 'estadoAdmin', 'estadoMinisterio', 'estadoIntendencia']) {
+    const nombre = `IX_audits_log_${campo}`;
+    if (!(await existeIndice(queryInterface, 'audits_log', nombre))) {
+      await queryInterface.addIndex({ tableName: 'audits_log', schema: 'dbo' }, [campo], {
+        name: nombre,
+      });
+    }
+  }
 }
 
 export async function down(queryInterface: QueryInterface): Promise<void> {

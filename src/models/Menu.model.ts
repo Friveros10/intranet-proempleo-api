@@ -48,5 +48,5 @@ MenuModel.init(
     url_spe: DataTypes.STRING,
     asp: DataTypes.STRING,
   },
-  { sequelize, tableName: 'menus', schema: 'dbo', timestamps: false }
+  { sequelize, tableName: 'MENUS_proempleo', schema: 'dbo', timestamps: false }
 );

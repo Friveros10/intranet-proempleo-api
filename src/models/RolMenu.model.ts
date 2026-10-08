@@ -24,5 +24,5 @@ RolMenuModel.init(
     corr_men: DataTypes.INTEGER,
     acc_RolMen: DataTypes.STRING,
   },
-  { sequelize, tableName: 'rol_menu', schema: 'dbo', timestamps: false }
+  { sequelize, tableName: 'ROL_MENU_proempleo', schema: 'dbo', timestamps: false }
 );

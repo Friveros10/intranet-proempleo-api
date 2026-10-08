@@ -21,5 +21,5 @@ RolSicapModel.init(
     nom_rol: DataTypes.STRING,
     est_rol: DataTypes.STRING,
   },
-  { sequelize, tableName: 'roles', schema: 'dbo', timestamps: false }
+  { sequelize, tableName: 'ROLES_proempleo', schema: 'dbo', timestamps: false }
 );

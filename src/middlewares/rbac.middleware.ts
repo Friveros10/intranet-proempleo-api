@@ -6,7 +6,7 @@ import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repos
  * Valida que el usuario autenticado posea al menos uno de los permisos requeridos.
  * Los permisos se recalculan desde la capa de datos en cada request (no se confía
  * únicamente en lo que viaja en el JWT). Los permisos provienen de los menús
- * (dbo.menus) habilitados para el rol del usuario (dbo.rol_menu).
+ * (dbo.MENUS_proempleo) habilitados para el rol del usuario (dbo.ROL_MENU_proempleo).
  */
 export function requirePermisos(...permisosRequeridos: string[]) {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
