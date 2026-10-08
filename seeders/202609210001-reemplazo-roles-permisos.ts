@@ -7,8 +7,12 @@ import { RolMenuModel } from "../src/models/RolMenu.model";
  * Seeder del módulo de Reemplazo de Beneficiarios de Proyecto.
  *
  * Crea los 3 roles solicitados (ADMIN, MINISTERIO, INTENDENCIA) y los permisos
- * (dbo.menus + dbo.rol_menu) asociados exclusivamente a dicho módulo, ya que el
- * resto de los módulos del sistema legacy aún no están desarrollados.
+ * (dbo.MENUS_proempleo + dbo.ROL_MENU_proempleo) asociados exclusivamente a dicho
+ * módulo, ya que el resto de los módulos del sistema legacy aún no están
+ * desarrollados.
+ *
+ * Escribe únicamente en tablas propias ProEmpleo; las legacy dbo.roles,
+ * dbo.menus y dbo.rol_menu no se modifican.
  *
  * Reglas de negocio consideradas para asignar los permisos:
  * - ADMIN: acceso total, ve todos los registros sin importar la región, puede
@@ -37,7 +41,7 @@ const ROLES: RolSeed[] = [
 ];
 
 // Permisos (menús) propios de los módulos implementados
-// cod_men está limitado a VARCHAR(10) y Nom_men a VARCHAR(50) en la tabla legacy dbo.menus
+// cod_men está limitado a VARCHAR(10) y Nom_men a VARCHAR(50) en dbo.MENUS_proempleo
 const MENUS_REEMPLAZO: MenuSeed[] = [
   { cod_men: "REM_VERALL", Nom_men: "Reemplazo: ver todos los registros" },
   { cod_men: "REM_VERREG", Nom_men: "Reemplazo: ver registros de su región" },
@@ -99,7 +103,7 @@ async function seedMenus(): Promise<Map<string, number>> {
       continue;
     }
 
-    // corr_men es identity en dbo.menus: se omite para que SQL Server lo autogenere
+    // corr_men es identity en dbo.MENUS_proempleo: se omite para que SQL Server lo autogenere
     const creado = await MenuModel.create({
       cod_men: menu.cod_men,
       Nom_men: menu.Nom_men,
@@ -123,8 +127,8 @@ async function seedRolMenu(codigoACorrMen: Map<string, number>): Promise<void> {
       });
       if (existente) continue;
 
-      // corr_RolMen es identity en dbo.rol_menu: se omite para que SQL Server lo autogenere
-      // acc_RolMen es CHAR(2) NOT NULL en dbo.rol_menu
+      // corr_RolMen es identity en dbo.ROL_MENU_proempleo: se omite para que SQL Server lo autogenere
+      // acc_RolMen es CHAR(2) en dbo.ROL_MENU_proempleo
       await RolMenuModel.create({
         corr_rol: rol.corr_rol,
         corr_men,
@@ -175,3 +179,4 @@ if (require.main === module) {
       return sequelize.close();
     });
 }
+
