@@ -11,16 +11,29 @@ export const crearDocumentoAuditoriaSchema = z.object({
     apellidoPaterno: texto,
     apellidoMaterno: texto,
     ong: texto,
-    idComuna: id,
+    comuna: texto,
   }).strict(),
 });
 
 export const listarDocumentoAuditoriaSchema = z.object({
-  query: z.object({ region: id.optional() }),
+  query: z.object({
+    region: id.optional(),
+    ong: texto.optional(),
+    rut: z.string().trim().max(12)
+      .transform((value) => value.replace(/\./g, '').toUpperCase())
+      .pipe(z.string().regex(/^[1-9]\d{0,7}(?:-[\dK])?$/, 'RUT inválido'))
+      .optional(),
+    page: id.max(Math.floor(2147483647 / 50) + 1).default(1),
+  }),
 });
 
 export const documentoAuditoriaParamsSchema = z.object({
   params: z.object({ id, tipo, filename: z.string().optional() }),
+});
+
+export const guardarDocumentosAuditoriaSchema = z.object({
+  params: z.object({ id }),
+  body: z.object({}).strict(),
 });
 
 export const estadoDocumentoAuditoriaSchema = documentoAuditoriaParamsSchema.extend({
@@ -35,6 +48,10 @@ export const estadoDocumentoAuditoriaSchema = documentoAuditoriaParamsSchema.ext
       });
     }
   }),
+});
+
+export const estadoUploadDocumentoAuditoriaSchema = documentoAuditoriaParamsSchema.extend({
+  body: z.object({ status: z.literal('subidos') }).strict(),
 });
 
 export type CrearDocumentoAuditoriaInput = z.infer<typeof crearDocumentoAuditoriaSchema>['body'];

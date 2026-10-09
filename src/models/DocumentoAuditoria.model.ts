@@ -1,6 +1,6 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
-import { DocumentoStatus } from './DocReemplazoBenProyecto.model';
+export type DocumentoAuditoriaStatus = 'pendiente' | 'subidos' | 'aprobado' | 'rechazado';
 
 export interface DocumentoAuditoria {
   id: number;
@@ -10,14 +10,14 @@ export interface DocumentoAuditoria {
   apellidoPaterno: string;
   apellidoMaterno: string;
   ong: string;
-  idComuna: number;
+  comuna: string;
   idRegion: number;
   certCotizacionesUrl: string;
   liquidacionUrl: string;
   certCotizacionesNombre: string;
   liquidacionNombre: string;
-  estadoCert: DocumentoStatus;
-  estadoLiquidacion: DocumentoStatus;
+  estadoCert: DocumentoAuditoriaStatus;
+  estadoLiquidacion: DocumentoAuditoriaStatus;
   comentarioCert: string | null;
   comentarioLiquidacion: string | null;
   created_at: Date;
@@ -35,12 +35,13 @@ type Creation = Optional<DocumentoAuditoria,
 export class DocumentoAuditoriaModel extends Model<DocumentoAuditoria, Creation> {
   declare id: number;
   declare idRegion: number;
+  declare comuna: string;
   declare certCotizacionesUrl: string;
   declare liquidacionUrl: string;
   declare certCotizacionesNombre: string;
   declare liquidacionNombre: string;
-  declare estadoCert: DocumentoStatus;
-  declare estadoLiquidacion: DocumentoStatus;
+  declare estadoCert: DocumentoAuditoriaStatus;
+  declare estadoLiquidacion: DocumentoAuditoriaStatus;
 }
 
 DocumentoAuditoriaModel.init({
@@ -51,7 +52,7 @@ DocumentoAuditoriaModel.init({
   apellidoPaterno: { type: DataTypes.STRING(255), allowNull: false },
   apellidoMaterno: { type: DataTypes.STRING(255), allowNull: false },
   ong: { type: DataTypes.STRING(255), allowNull: false },
-  idComuna: { type: DataTypes.INTEGER, allowNull: false },
+  comuna: { type: DataTypes.STRING(255), allowNull: false },
   idRegion: { type: DataTypes.INTEGER, allowNull: false },
   certCotizacionesUrl: { type: DataTypes.STRING(500), allowNull: false },
   liquidacionUrl: { type: DataTypes.STRING(500), allowNull: false },
@@ -59,11 +60,11 @@ DocumentoAuditoriaModel.init({
   liquidacionNombre: { type: DataTypes.STRING(255), allowNull: false },
   estadoCert: {
     type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente',
-    validate: { isIn: [['pendiente', 'rechazado', 'aprobado']] },
+    validate: { isIn: [['pendiente', 'subidos', 'rechazado', 'aprobado']] },
   },
   estadoLiquidacion: {
     type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pendiente',
-    validate: { isIn: [['pendiente', 'rechazado', 'aprobado']] },
+    validate: { isIn: [['pendiente', 'subidos',  'rechazado', 'aprobado']] },
   },
   comentarioCert: { type: DataTypes.STRING(1000), allowNull: true },
   comentarioLiquidacion: { type: DataTypes.STRING(1000), allowNull: true },

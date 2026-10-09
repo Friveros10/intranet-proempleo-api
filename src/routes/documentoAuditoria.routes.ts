@@ -10,6 +10,8 @@ import { documentoAuditoriaController as controller } from '../controllers/docum
 import {
   crearDocumentoAuditoriaSchema, listarDocumentoAuditoriaSchema,
   documentoAuditoriaParamsSchema, estadoDocumentoAuditoriaSchema,
+  estadoUploadDocumentoAuditoriaSchema,
+  guardarDocumentosAuditoriaSchema,
 } from '../validations/documentoAuditoria.validation';
 
 const router = Router();
@@ -21,11 +23,18 @@ router.post('/', requireRoles('INTENDENCIA'), uploadAuditoria.fields([
 ]), validate(crearDocumentoAuditoriaSchema), asyncHandler(controller.crear));
 router.patch('/:id/documentos/:tipo/estado', requireRoles('ADMIN', 'MINISTERIO'),
   validate(estadoDocumentoAuditoriaSchema), asyncHandler(controller.estado));
+router.patch('/:id/documentos', requireRoles('INTENDENCIA'),
+  uploadAuditoria.fields([
+    { name: 'certCotizaciones', maxCount: 1 }, { name: 'liquidacion', maxCount: 1 },
+  ]), validate(guardarDocumentosAuditoriaSchema), asyncHandler(controller.guardarDocumentos));
+router.patch('/:id/documentos/:tipo/estadoUpload', requireRoles('INTENDENCIA'),
+  validate(estadoUploadDocumentoAuditoriaSchema), asyncHandler(controller.estadoUpload));
 router.patch('/:id/documentos/:tipo/archivo', requireRoles('INTENDENCIA'),
   validate(documentoAuditoriaParamsSchema), uploadAuditoria.single('archivo'),
   asyncHandler(controller.reemplazar));
 router.get('/:id/documentos/:tipo/:filename', validate(documentoAuditoriaParamsSchema),
   asyncHandler(controller.archivo));
+router.get('/auditoria-bio-bio/:rut', asyncHandler(controller.auditoriaBioBioByRut));
 
 const uploadErrorHandler: ErrorRequestHandler = (err, _req, _res, next) => {
   if (err instanceof MulterError) {

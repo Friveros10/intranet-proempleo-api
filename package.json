@@ -13,7 +13,8 @@
     "test:usuarios": "node -r ts-node/register/transpile-only --test tests/usuariosProempleo.test.cjs",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
-    "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts"
+    "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts",
+    "seed:auditoria": "ts-node --transpile-only seeders/20261009164028-audit_tables_documents.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {
