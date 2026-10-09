@@ -25,14 +25,18 @@ async function adjuntarBeneficiarios(
 ): Promise<void> {
   const ruts = new Set<number>();
   for (const reemplazo of reemplazos) {
-    ruts.add(reemplazo.idBeneficiarioProyecto);
+    if (reemplazo.idBeneficiarioProyecto !== null) {
+      ruts.add(reemplazo.idBeneficiarioProyecto);
+    }
     ruts.add(reemplazo.idBeneficiarioNuevo);
   }
   const resumenes = await beneficiarioRepository.findResumenesPorRuts([...ruts]);
   for (const reemplazo of reemplazos) {
     const dataValues = reemplazo.dataValues as unknown as Record<string, unknown>;
     dataValues.beneficiarioActual =
-      resumenes.get(reemplazo.idBeneficiarioProyecto) ?? null;
+      reemplazo.idBeneficiarioProyecto === null
+        ? null
+        : (resumenes.get(reemplazo.idBeneficiarioProyecto) ?? null);
     dataValues.beneficiarioNuevo =
       resumenes.get(reemplazo.idBeneficiarioNuevo) ?? null;
   }
@@ -101,16 +105,16 @@ export const reemplazoBenProyectoRepository = {
   },
 
   async create(data: {
-    idBeneficiarioProyecto: number;
+    idBeneficiarioProyecto: number | null;
     idBeneficiarioNuevo: number;
     idProyecto: number;
     rutUsuarioSolicitante: number;
     puntajeRsh: number | null;
+    fechaSolicitudReemplazo: string;
   }): Promise<ReemplazoBenProyectoModel> {
     return ReemplazoBenProyectoModel.create({
       ...data,
       status: 'pendiente',
-      fechaSolicitudReemplazo: new Date().toISOString(),
       fechaAprobacionReemplazo: null,
     });
   },

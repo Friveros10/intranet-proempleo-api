@@ -187,25 +187,32 @@ export const reemplazoBenProyectoService = {
     // console.log("[reemplazoBenProyectoService.crear] data recibida:", data);
     // console.log("[reemplazoBenProyectoService.crear] cantidad de archivos:", archivos.length);
     const [beneficiarioActual, proyecto, contexto] = await Promise.all([
-      beneficiarioRepository.findByRut(data.idBeneficiarioProyecto),
-      proyectoRepository.findByFolio(data.idProyecto),
+      data.cupoCobertura
+        ? Promise.resolve(null)
+        : beneficiarioRepository.findByRut(data.idBeneficiarioProyecto!),
+      proyectoRepository.findByFolioConCupo(data.idProyecto),
       obtenerContextoUsuario(rutUsuarioSolicitante),
     ]);
 
-    // await planEgresoHistoricoService.validarPuedeIngresarPorRun(data.idBeneficiarioProyecto);
-    if (!beneficiarioActual) {
+    if (!data.cupoCobertura && !beneficiarioActual) {
       throw new AppError("El beneficiario a reemplazar no existe", 404);
     }
     if (!proyecto) {
       throw new AppError("El proyecto no existe", 404);
     }
+    if (
+      data.cupoCobertura &&
+      (proyecto.cuposDisponibles === null || proyecto.cuposDisponibles <= 0)
+    ) {
+      throw new AppError("El proyecto no tiene cupos de cobertura disponibles", 409);
+    }
 
-    // Roles regionales (ej. INTENDENCIA) solo pueden solicitar reemplazos de beneficiarios de su propia región
+    // Roles regionales (ej. INTENDENCIA) solo pueden solicitar dentro de su región.
     if (
       !contexto.puedeVerTodasLasRegiones &&
-      beneficiarioActual.reg_ben !== contexto.regionUsuario
+      proyecto.reg_pro !== contexto.regionUsuario
     ) {
-      throw new AppError("El beneficiario no pertenece a tu zona", 403);
+      throw new AppError("El proyecto no pertenece a tu zona", 403);
     }
 
     if (data.documentos.length !== archivos.length) {
@@ -272,6 +279,7 @@ export const reemplazoBenProyectoService = {
     }
 
     const reemplazos = [];
+    const fechaSolicitudReemplazo = new Date().toISOString();
     for (const candidato of candidatos) {
       // console.log("[reemplazoBenProyectoService.crear] procesando candidato:", candidato.cuerpo);
       const beneficiarioNuevoExistente = await beneficiarioRepository.findByRut(
@@ -299,11 +307,14 @@ export const reemplazoBenProyectoService = {
       }
 
       const reemplazo = await reemplazoBenProyectoRepository.create({
-        idBeneficiarioProyecto: data.idBeneficiarioProyecto,
+        idBeneficiarioProyecto: data.cupoCobertura
+          ? null
+          : data.idBeneficiarioProyecto!,
         idBeneficiarioNuevo: candidato.cuerpo,
         idProyecto: data.idProyecto,
         rutUsuarioSolicitante,
         puntajeRsh: candidato.beneficiario.puntajeRsh ?? null,
+        fechaSolicitudReemplazo,
       });
       // console.log("[reemplazoBenProyectoService.crear] reemplazo creado con id:", reemplazo.id);
       for (const documento of documentosPorRut.get(candidato.cuerpo) ?? []) {
@@ -325,8 +336,10 @@ export const reemplazoBenProyectoService = {
         modulo: "REEMPLAZOS",
         entidad: "Reemplazo_benpro",
         registroId: String(reemplazo.id),
-        region: proyecto.reg_pro ?? beneficiarioActual.reg_ben ?? null,
-        detalle: `Solicitud de Reemplazo de Cupo creada para proyecto ${data.idProyecto}`,
+        region: proyecto.reg_pro ?? null,
+        detalle: data.cupoCobertura
+          ? `Solicitud de Cupo de Cobertura creada para proyecto ${data.idProyecto}`
+          : `Solicitud de Reemplazo de Cupo creada para proyecto ${data.idProyecto}`,
         req,
       });
       reemplazos.push(
@@ -390,7 +403,11 @@ export const reemplazoBenProyectoService = {
       throw new AppError("Uno o más candidatos no existen", 404);
     }
     const cupos = new Set(
-      reemplazos.map((r) => `${r.idProyecto}::${r.idBeneficiarioProyecto}`),
+      reemplazos.map((r) =>
+        r.idBeneficiarioProyecto === null
+          ? `${r.idProyecto}::cobertura::${r.fechaSolicitudReemplazo}`
+          : `${r.idProyecto}::${r.idBeneficiarioProyecto}`,
+      ),
     );
     if (cupos.size !== 1) {
       throw new AppError(

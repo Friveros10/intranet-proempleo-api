@@ -43,12 +43,16 @@ function jsonField<T extends z.ZodTypeAny>(schema: T, mensajeInvalido: string) {
 
 export const crearReemplazoSchema = z.object({
   body: z.object({
-    idBeneficiarioProyecto: z.coerce
-      .number({ required_error: "idBeneficiarioProyecto es requerido" })
-      .int(),
+    cupoCobertura: z.preprocess(
+      (valor) =>
+        valor === "true" ? true : valor === "false" ? false : valor,
+      z.boolean(),
+    ),
+    idBeneficiarioProyecto: z.coerce.number().int().positive().optional(),
     idProyecto: z.coerce
       .number({ required_error: "idProyecto es requerido" })
-      .int(),
+      .int()
+      .positive(),
     nuevosBeneficiarios: jsonField(
       z
         .array(nuevoBeneficiarioSchema)
@@ -64,6 +68,14 @@ export const crearReemplazoSchema = z.object({
       ),
       "documentos inválido",
     ),
+  }).superRefine((data, ctx) => {
+    if (!data.cupoCobertura && data.idBeneficiarioProyecto === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["idBeneficiarioProyecto"],
+        message: "idBeneficiarioProyecto es requerido",
+      });
+    }
   }),
 });
 

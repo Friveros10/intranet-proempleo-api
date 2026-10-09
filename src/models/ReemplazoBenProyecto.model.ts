@@ -11,7 +11,7 @@ export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'enRevisi
 
 export interface ReemplazoBenProyecto {
   id: number;
-  idBeneficiarioProyecto: number;
+  idBeneficiarioProyecto: number | null;
   idBeneficiarioNuevo: number;
   idProyecto: number;
   rutUsuarioSolicitante: number | null;
@@ -59,7 +59,7 @@ export class ReemplazoBenProyectoModel
   implements ReemplazoBenProyecto
 {
   declare id: number;
-  declare idBeneficiarioProyecto: number; //beneficiario antiguo rut
+  declare idBeneficiarioProyecto: number | null; // nulo para cupos de cobertura
   declare idBeneficiarioNuevo: number; //beneficiario nuevo rut
   declare idProyecto: number; //proyecto fol_pro
   declare rutUsuarioSolicitante: number | null; //rut de quien creó la solicitud
@@ -82,7 +82,7 @@ export class ReemplazoBenProyectoModel
 ReemplazoBenProyectoModel.init(
   {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    idBeneficiarioProyecto: { type: DataTypes.INTEGER, allowNull: false },
+    idBeneficiarioProyecto: { type: DataTypes.INTEGER, allowNull: true },
     idBeneficiarioNuevo: { type: DataTypes.INTEGER, allowNull: false },
     idProyecto: { type: DataTypes.INTEGER, allowNull: false },
     rutUsuarioSolicitante: { type: DataTypes.INTEGER, allowNull: true },

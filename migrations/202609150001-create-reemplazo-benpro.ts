@@ -22,7 +22,7 @@ export async function up(queryInterface: QueryInterface): Promise<void> {
     },
     idBeneficiarioProyecto: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     idBeneficiarioNuevo: {
       type: DataTypes.INTEGER,

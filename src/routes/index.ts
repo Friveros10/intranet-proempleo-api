@@ -9,6 +9,7 @@ import planEgresoHistoricoRoutes from './planEgresoHistorico.routes';
 import wsRoutes from './ws.routes';
 import usuarioRoutes from './usuario.routes';
 import documentoAuditoriaRoutes from './documentoAuditoria.routes';
+import proyectoRoutes from './proyecto.routes';
 
 const router = Router();
 
@@ -18,6 +19,7 @@ router.use('/sicap', sicapRoutes);
 router.use('/reemplazos', reemplazoBenProyectoRoutes);
 router.use('/documentos-reemplazo', docReemplazoBenProyectoRoutes);
 router.use('/beneficiarios', beneficiarioRoutes);
+router.use('/proyectos', proyectoRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);
