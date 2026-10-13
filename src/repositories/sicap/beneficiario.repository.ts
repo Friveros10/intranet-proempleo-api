@@ -1,4 +1,4 @@
-import { IncludeOptions, Op, WhereOptions } from "sequelize";
+import { IncludeOptions, Op, Transaction, WhereOptions } from "sequelize";
 import {
   Beneficiario,
   BeneficiarioModel,
@@ -499,6 +499,32 @@ export const beneficiarioRepository = {
       statusFicha: data.statusFicha,
     });
     return creado;
+  },
+
+  // Solo afecta a beneficiarios creados por una solicitud de reemplazo
+  // (statusFicha = 1, ficha aún incompleta) y no eliminados (status >= 0).
+  async actualizarStatusPorResultadoReemplazo(
+    rut_ben: number,
+    status: 0 | 1,
+    usu_mod: string,
+    transaction?: Transaction,
+  ): Promise<number> {
+    const [afectados] = await BeneficiarioProempleoModel.update(
+      {
+        status,
+        usuarioModificacion: usu_mod,
+        fechaModificacion: sequelize.fn("GETDATE") as unknown as Date,
+      },
+      {
+        where: {
+          rutBeneficiario: rut_ben,
+          statusFicha: 1,
+          status: { [Op.gte]: 0 },
+        },
+        transaction,
+      },
+    );
+    return afectados;
   },
 
   async createCompleto(

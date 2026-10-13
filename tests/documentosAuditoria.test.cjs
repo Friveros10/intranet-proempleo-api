@@ -556,6 +556,9 @@ test('HTTP aplica autenticacion, roles y validacion antes de invocar servicio', 
   })}`;
   const headers = (role) => ({ cookie: cookie(role), 'Content-Type': 'application/json' });
   try {
+    perfil(5);
+    assert.equal((await fetch(base, { headers: headers('INTENDENCIA') })).status, 403);
+    perfil(8);
     assert.equal((await fetch(base)).status, 401);
     assert.equal((await fetch(base, { headers: headers('OTRO') })).status, 403);
     const listado = mock.method(service, 'listar', async () => ({

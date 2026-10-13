@@ -1,6 +1,13 @@
 import { ProyectoModel } from '../../models/Proyecto.model';
 import { BenProModel } from '../../models/BenPro.model';
 import { ComunaModel } from '../../models/Comuna.model';
+import { col, fn } from 'sequelize';
+
+export interface PeriodoSinCupo {
+  ano: number;
+  mes: number;
+  cantidad: number;
+}
 
 export interface ProyectoConCupo {
   fol_pro: number;
@@ -13,6 +20,7 @@ export interface ProyectoConCupo {
   cuposDisponibles: number | null;
   ultimoAnoBenPro: number | null;
   ultimoMesBenPro: number | null;
+  periodosSinCupo: PeriodoSinCupo[];
 }
 
 export const proyectoRepository = {
@@ -63,6 +71,28 @@ export const proyectoRepository = {
     };
 
     const empPro = proyecto.emp_pro ?? null;
+
+    const conteosPorPeriodo = (await BenProModel.findAll({
+      where: { fol_pro },
+      attributes: [
+        'ano_BenPro',
+        'mes_benpro',
+        [fn('COUNT', col('*')), 'cantidad'],
+      ],
+      group: ['ano_BenPro', 'mes_benpro'],
+      raw: true,
+    })) as unknown as Array<{ ano_BenPro: number; mes_benpro: number; cantidad: number | string }>;
+
+    const periodosSinCupo: PeriodoSinCupo[] =
+      empPro === null
+        ? []
+        : conteosPorPeriodo
+            .map((periodo) => ({
+              ano: Number(periodo.ano_BenPro),
+              mes: Number(periodo.mes_benpro),
+              cantidad: Number(periodo.cantidad),
+            }))
+            .filter((periodo) => periodo.cantidad >= empPro);
     const cuposDisponibles = empPro === null ? null : Math.max(empPro - cupoUtilizado, 0);
 
     return {
@@ -76,6 +106,7 @@ export const proyectoRepository = {
       cuposDisponibles,
       ultimoAnoBenPro: ultimoRegistro?.ano_BenPro ?? null,
       ultimoMesBenPro: ultimoRegistro?.mes_benpro ?? null,
+      periodosSinCupo,
     };
   },
 };

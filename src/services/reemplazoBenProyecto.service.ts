@@ -202,7 +202,9 @@ export const reemplazoBenProyectoService = {
     }
     if (
       data.cupoCobertura &&
-      (proyecto.cuposDisponibles === null || proyecto.cuposDisponibles <= 0)
+      (proyecto.cuposDisponibles === null ||
+        proyecto.cuposDisponibles <= 0 ||
+        proyecto.periodosSinCupo.length > 0)
     ) {
       throw new AppError("El proyecto no tiene cupos de cobertura disponibles", 409);
     }
@@ -374,6 +376,13 @@ export const reemplazoBenProyectoService = {
     if (!actualizado) {
       throw new AppError("Reemplazo de Cupo no encontrado", 404);
     }
+    if (status === "aprobado" || status === "rechazado") {
+      await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+        actualizado.idBeneficiarioNuevo,
+        status === "aprobado" ? 1 : 0,
+        String(rutUsuario),
+      );
+    }
 
     await auditLogRepository.registrar({
       usuarioId: rutUsuario,
@@ -468,6 +477,13 @@ export const reemplazoBenProyectoService = {
           evaluacion.id,
           status,
           null,
+          transaction,
+        );
+        await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+          reemplazos.find((item) => item.id === evaluacion.id)!
+            .idBeneficiarioNuevo,
+          status === "aprobado" ? 1 : 0,
+          String(rutUsuario),
           transaction,
         );
       }

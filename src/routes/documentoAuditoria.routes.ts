@@ -1,6 +1,8 @@
-import { ErrorRequestHandler, Router } from 'express';
+import { ErrorRequestHandler, RequestHandler, Router } from 'express';
 import { MulterError } from 'multer';
 import { AppError } from '../utils/AppError';
+import { usuarioSicapRepository } from '../repositories/sicap/usuarioSicap.repository';
+import { puedeAccederAuditoria, puedeVerTodasRegionesAuditoria } from '../constants/documentosAuditoria';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/rbac.middleware';
 import { validate } from '../middlewares/validate.middleware';
@@ -15,7 +17,22 @@ import {
 } from '../validations/documentoAuditoria.validation';
 
 const router = Router();
-router.use(requireAuth, requireRoles('INTENDENCIA', 'ADMIN', 'MINISTERIO'));
+
+const requireAccesoAuditoria: RequestHandler = async (req, _res, next) => {
+  try {
+    const roles = req.user!.roles;
+    if (puedeVerTodasRegionesAuditoria(roles)) return next();
+    const usuario = await usuarioSicapRepository.findByRut(Number(req.user!.sub));
+    if (!puedeAccederAuditoria(roles, usuario?.reg_usu)) {
+      return next(new AppError('No tiene acceso al módulo de auditoría', 403));
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+};
+
+router.use(requireAuth, requireRoles('INTENDENCIA', 'ADMIN', 'MINISTERIO'), requireAccesoAuditoria);
 router.get('/catalogos', asyncHandler(controller.catalogos));
 router.get('/', validate(listarDocumentoAuditoriaSchema), asyncHandler(controller.listar));
 router.post('/', requireRoles('INTENDENCIA'), uploadAuditoria.fields([
