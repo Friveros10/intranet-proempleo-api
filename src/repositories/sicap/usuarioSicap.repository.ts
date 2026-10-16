@@ -57,6 +57,7 @@ export const usuarioSicapRepository = {
     nom_usu: string;
     pat_usu: string;
     mat_usu: string;
+    ema_usu: string;
     reg_usu: number;
     corr_rol: number;
     log_usu: string;
@@ -72,10 +73,10 @@ export const usuarioSicapRepository = {
 
   async actualizarDatosPersonales(
     rut_usu: number,
-    data: { dir_usu: string | null; ciu_usu: number | null; com_usu: number | null; ema_usu: string | null },
+    data: { dir_usu: string | null; ciu_usu: number | null; com_usu: number | null },
   ): Promise<void> {
     await UsuarioSicapModel.update(
-      { ...data, fec_mod: sequelize.fn('GETDATE') as unknown as Date },
+      { dir_usu: data.dir_usu, ciu_usu: data.ciu_usu, com_usu: data.com_usu, fec_mod: sequelize.fn('GETDATE') as unknown as Date },
       { where: { rut_usu } },
     );
   },

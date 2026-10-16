@@ -6,6 +6,7 @@ export const crearUsuarioSchema = z.object({
     nom_usu: z.string({ required_error: 'El nombre es requerido' }).trim().min(1).max(50),
     pat_usu: z.string({ required_error: 'El apellido paterno es requerido' }).trim().min(1).max(50),
     mat_usu: z.string({ required_error: 'El apellido materno es requerido' }).trim().min(1).max(50),
+    ema_usu: z.string({ required_error: 'El correo electrónico es requerido' }).trim().email('El correo electrónico no es válido').max(50),
     reg_usu: z.coerce.number({ required_error: 'La región es requerida' }).int(),
     corr_rol: z.coerce.number({ required_error: 'El perfil es requerido' }).int(),
   }),
@@ -16,7 +17,7 @@ export const actualizarDatosPersonalesSchema = z.object({
     dir_usu: z.string().trim().min(1).max(50).nullable().optional(),
     ciu_usu: z.coerce.number().int().nullable().optional(),
     com_usu: z.coerce.number().int().nullable().optional(),
-    ema_usu: z.string().trim().email('El email no es válido').max(50).nullable().optional(),
+    ema_usu: z.never({ invalid_type_error: 'El correo electrónico no se puede modificar desde configuración' }).optional(),
   }),
 });
 
