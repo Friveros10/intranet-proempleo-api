@@ -3,7 +3,7 @@ import { usuarioController } from '../controllers/usuario.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/rbac.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { actualizarDatosPersonalesSchema, cambiarClaveSchema, crearUsuarioSchema } from '../validations/usuario.validation';
+import { actualizarDatosPersonalesSchema, cambiarClaveSchema, crearUsuarioSchema, listarUsuariosSchema } from '../validations/usuario.validation';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -16,7 +16,7 @@ router.put('/perfil', validate(actualizarDatosPersonalesSchema), asyncHandler(us
 router.put('/perfil/clave', validate(cambiarClaveSchema), asyncHandler(usuarioController.cambiarClave));
 
 // Módulo de administración: solo visible/editable por ADMIN
-router.get('/', requireRoles('ADMIN'), asyncHandler(usuarioController.listar));
+router.get('/', requireRoles('ADMIN'), validate(listarUsuariosSchema), asyncHandler(usuarioController.listar));
 router.post('/', requireRoles('ADMIN'), validate(crearUsuarioSchema), asyncHandler(usuarioController.crear));
 router.get('/catalogos/roles', requireRoles('ADMIN'), asyncHandler(usuarioController.listarRoles));
 

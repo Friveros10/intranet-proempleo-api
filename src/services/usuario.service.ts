@@ -66,8 +66,8 @@ function usuarioSeguro(usuario: UsuarioSicapModel) {
 }
 
 export const usuarioService = {
-  async listar() {
-    return usuarioSicapRepository.findAllPerfilesValidos();
+  async listar(page = 1) {
+    return usuarioSicapRepository.findAllPerfilesValidos(page);
   },
 
   async listarRoles() {

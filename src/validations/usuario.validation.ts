@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+export const listarUsuariosSchema = z.object({
+  query: z.object({
+    page: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(1),
+  }),
+});
+
 export const crearUsuarioSchema = z.object({
   body: z.object({
     rut: z.string({ required_error: 'El RUT es requerido' }).min(2),

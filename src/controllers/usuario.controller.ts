@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { usuarioService } from "../services/usuario.service";
 
 export const usuarioController = {
-  async listar(_req: Request, res: Response): Promise<void> {
-    const data = await usuarioService.listar();
+  async listar(req: Request, res: Response): Promise<void> {
+    const data = await usuarioService.listar(Number(req.query.page));
     res.status(200).json(data);
   },
 

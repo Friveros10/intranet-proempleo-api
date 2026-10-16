@@ -15,9 +15,14 @@ export const usuarioSicapRepository = {
   },
 
   /** Usuarios cuyo rol es uno de los 3 perfiles habilitados (ADMIN/MINISTERIO/INTENDENCIA) */
-  async findAllPerfilesValidos(): Promise<UsuarioSicapModel[]> {
-    return UsuarioSicapModel.findAll({
-      where: { corr_rol: { [Op.in]: [...CORR_ROL_VALIDOS] } },
+  async findAllPerfilesValidos(page = 1) {
+    const limit = 20;
+    const where = { corr_rol: { [Op.in]: [...CORR_ROL_VALIDOS] } };
+    const total = await UsuarioSicapModel.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const pagina = Math.min(page, totalPages);
+    const data = await UsuarioSicapModel.findAll({
+      where,
       include: [
         { model: RolSicapModel, as: 'rol', attributes: [], required: false },
         { model: RegionModel, as: 'region', attributes: [], required: false },
@@ -32,9 +37,12 @@ export const usuarioSicapRepository = {
         [sequelize.col('comuna.nom_com'), 'nombre_comuna'],
         [sequelize.col('rol.nom_rol'), 'nombre_rol'],
       ],
-      order: [['nom_usu', 'ASC']],
+      order: [['reg_usu', 'DESC'], ['nom_usu', 'ASC'], ['rut_usu', 'ASC']],
+      limit,
+      offset: (pagina - 1) * limit,
       raw: true,
     });
+    return { data, pagination: { page: pagina, limit, total, totalPages } };
   },
 
   async existeLogin(log_usu: string): Promise<boolean> {
