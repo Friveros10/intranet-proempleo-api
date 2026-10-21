@@ -90,7 +90,7 @@ export const wsController = {
       E4: data.rshmintrab.E4,
       etnia_original: data.rshmintrab.etnia_original,
     });
-
+    // res.status(200).json(data);
     res.status(200).json({
       detalle: data.detalle,
       apellidoPaterno: data.rshmintrab.ape1,
