@@ -95,6 +95,7 @@ test('reemplazo no declara FK legacy y la asociacion de solicitante queda sin co
 });
 
 test('login, listados y perfil consultan tabla nueva con asociaciones existentes', async () => {
+  mock.method(UsuarioSicapModel, 'count', async () => 0);
   const query = mock.method(sequelize, 'query', async (_sql, options) => options.plain ? null : []);
   await repository.findByLogin('login-test');
   await repository.findByRut(12345678);
@@ -104,6 +105,44 @@ test('login, listados y perfil consultan tabla nueva con asociaciones existentes
     assert.match(sql, /\[dbo\]\.\[users_proempleo\]/);
     assert.doesNotMatch(sql, /\[dbo\]\.\[Usuario\]/);
     assert.match(sql, /LEFT OUTER JOIN \[dbo\]\.\[ROLES_proempleo\]/);
+  }
+});
+
+test('usuarios se paginan de 20 en 20 por region descendente con desempate estable', async () => {
+  const count = mock.method(UsuarioSicapModel, 'count', async () => 45);
+  const rows = Array.from({ length: 20 }, (_, i) => ({ rut_usu: i + 21 }));
+  const find = mock.method(UsuarioSicapModel, 'findAll', async () => rows);
+  const response = await service.listar(2);
+  assert.deepEqual(response, {
+    data: rows, pagination: { page: 2, limit: 20, total: 45, totalPages: 3 },
+  });
+  const options = find.mock.calls[0].arguments[0];
+  assert.equal(options.limit, 20);
+  assert.equal(options.offset, 20);
+  assert.deepEqual(options.order, [['reg_usu', 'DESC'], ['nom_usu', 'ASC'], ['rut_usu', 'ASC']]);
+  assert.deepEqual(options.where, count.mock.calls[0].arguments[0].where);
+  assert.equal(options.where.corr_rol[require('sequelize').Op.in].length, 3);
+});
+
+test('usuarios ajusta paginas fuera de rango y admite una lista vacia', async () => {
+  const count = mock.method(UsuarioSicapModel, 'count', async () => 45);
+  const find = mock.method(UsuarioSicapModel, 'findAll', async () => []);
+  let response = await service.listar(100);
+  assert.deepEqual(response.pagination, { page: 3, limit: 20, total: 45, totalPages: 3 });
+  assert.equal(find.mock.calls[0].arguments[0].offset, 40);
+  count.mock.mockImplementation(async () => 0);
+  response = await service.listar();
+  assert.deepEqual(response, {
+    data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
+  });
+  assert.equal(find.mock.calls[1].arguments[0].offset, 0);
+});
+
+test('paginacion de usuarios valida pagina positiva entera y usa pagina uno por defecto', () => {
+  assert.equal(schemas.listarUsuariosSchema.parse({ query: {} }).query.page, 1);
+  assert.equal(schemas.listarUsuariosSchema.parse({ query: { page: '2' } }).query.page, 2);
+  for (const page of ['0', '-1', '1.5', 'abc', '', '9007199254740992']) {
+    assert.equal(schemas.listarUsuariosSchema.safeParse({ query: { page } }).success, false);
   }
 });
 
@@ -128,11 +167,12 @@ test('escrituras existentes usan modelo nuevo y GETDATE para datetime', async ()
   await repository.crear({
     rut_usu: 12345678, log_usu: 'ana', dig_usu: '5', nom_usu: 'Ana',
     pat_usu: 'Perez', mat_usu: 'Soto', cla_usu: 'test-value',
-    reg_usu: 8, corr_rol: 100, usu_cre: 'admin',
+    reg_usu: 8, corr_rol: 100, usu_cre: 'admin', ema_usu: 'test@example.com',
   });
   assert.equal(create.mock.calls[0].arguments[0].est_usu, 'ACTIVO');
   assert.equal(create.mock.calls[0].arguments[0].fec_cre.fn, 'GETDATE');
-  await repository.actualizarDatosPersonales(12345678, { dir_usu: 'Direccion', ciu_usu: 1, com_usu: 2, ema_usu: 'test@example.com' });
+  assert.equal(create.mock.calls[0].arguments[0].ema_usu, 'test@example.com');
+  await repository.actualizarDatosPersonales(12345678, { dir_usu: 'Direccion', ciu_usu: 1, com_usu: 2 });
   await repository.cambiarClave(12345678, 'test-new-value');
   assert.equal(update.mock.callCount(), 2);
   for (const call of update.mock.calls) {
@@ -142,13 +182,13 @@ test('escrituras existentes usan modelo nuevo y GETDATE para datetime', async ()
 });
 
 test('validaciones rechazan valores que exceden varchar(50)', () => {
-  const create = { rut: '12345678-5', nom_usu: 'Ana', pat_usu: 'Perez', mat_usu: 'Soto', reg_usu: 8, corr_rol: 100 };
+  const create = { rut: '12345678-5', nom_usu: 'Ana', pat_usu: 'Perez', mat_usu: 'Soto', reg_usu: 8, corr_rol: 100, ema_usu: 'test@example.com' };
   for (const field of ['nom_usu', 'pat_usu', 'mat_usu']) {
     assert.equal(schemas.crearUsuarioSchema.safeParse({ body: { ...create, [field]: 'a'.repeat(50) } }).success, true);
     assert.equal(schemas.crearUsuarioSchema.safeParse({ body: { ...create, [field]: 'a'.repeat(51) } }).success, false);
   }
   assert.equal(schemas.actualizarDatosPersonalesSchema.safeParse({ body: { dir_usu: 'a'.repeat(51) } }).success, false);
-  assert.equal(schemas.actualizarDatosPersonalesSchema.safeParse({ body: { ema_usu: `${'a'.repeat(45)}@test.com` } }).success, false);
+  assert.equal(schemas.crearUsuarioSchema.safeParse({ body: { ...create, ema_usu: `${'a'.repeat(45)}@test.com` } }).success, false);
   assert.equal(schemas.cambiarClaveSchema.safeParse({ body: { claveActual: 'test', claveNueva: 'a'.repeat(51), claveNuevaConfirmacion: 'a'.repeat(51) } }).success, false);
 });
 
@@ -160,11 +200,60 @@ test('login generado respeta 50 caracteres incluso con sufijo por colision', asy
   const create = mock.method(repository, 'crear', async () => {});
   await service.crear({
     rut: '12345678-5', nom_usu: 'Ana', pat_usu: 'p'.repeat(50),
-    mat_usu: 'Soto', reg_usu: 8, corr_rol: 100,
+    mat_usu: 'Soto', reg_usu: 8, corr_rol: 100, ema_usu: 'test@example.com',
   }, 1);
   assert.equal(exists.mock.callCount(), 2);
   for (const call of exists.mock.calls) assert.equal(call.arguments[0].length, 50);
   const generated = create.mock.calls[0].arguments[0].log_usu;
   assert.equal(generated.length, 50);
   assert.equal(generated.endsWith('2'), true);
+  assert.equal(create.mock.calls[0].arguments[0].ema_usu, 'test@example.com');
+});
+
+test('crear usuario exige correo valido, recorta espacios y respeta el limite de 50 caracteres', () => {
+  const body = { rut: '12345678-5', nom_usu: 'Ana', pat_usu: 'Perez', mat_usu: 'Soto', reg_usu: 8, corr_rol: 100 };
+  for (const ema_usu of [undefined, null, '', '   ', 'correo-invalido']) {
+    assert.equal(schemas.crearUsuarioSchema.safeParse({ body: { ...body, ema_usu } }).success, false);
+  }
+  const email = `${'a'.repeat(41)}@test.com`;
+  assert.equal(email.length, 50);
+  const parsed = schemas.crearUsuarioSchema.parse({ body: { ...body, ema_usu: ` ${email} ` } });
+  assert.equal(parsed.body.ema_usu, email);
+  assert.equal(schemas.crearUsuarioSchema.safeParse({ body: { ...body, ema_usu: `a${email}` } }).success, false);
+});
+
+test('perfil rechaza cualquier cambio de correo y permite actualizar los otros datos', () => {
+  const body = { dir_usu: 'Direccion', ciu_usu: 1, com_usu: 2 };
+  assert.deepEqual(schemas.actualizarDatosPersonalesSchema.parse({ body }).body, body);
+  for (const ema_usu of ['nuevo@example.com', '', null]) {
+    const result = schemas.actualizarDatosPersonalesSchema.safeParse({ body: { ...body, ema_usu } });
+    assert.equal(result.success, false);
+    assert.match(result.error.issues[0].message, /no se puede modificar/);
+  }
+});
+
+test('actualizar perfil conserva el correo existente y actualiza direccion, ciudad y comuna', async () => {
+  const user = UsuarioSicapModel.build({
+    rut_usu: 12345678, log_usu: 'ana', dig_usu: '5', nom_usu: 'Ana',
+    pat_usu: 'Perez', cla_usu: 'test-value', ema_usu: 'original@example.com',
+  });
+  mock.method(repository, 'findByRut', async () => user);
+  const update = mock.method(UsuarioSicapModel, 'update', async (data) => {
+    user.set(data);
+    return [1];
+  });
+  const result = await service.actualizarPerfil(12345678, { dir_usu: 'Direccion', ciu_usu: 1, com_usu: 2 });
+  assert.equal(result.ema_usu, 'original@example.com');
+  assert.equal(result.dir_usu, 'Direccion');
+  assert.equal(result.ciu_usu, 1);
+  assert.equal(result.com_usu, 2);
+  assert.equal(Object.hasOwn(update.mock.calls[0].arguments[0], 'ema_usu'), false);
+});
+
+test('repositorio de perfil no persiste correo aunque reciba un campo adicional', async () => {
+  const update = mock.method(UsuarioSicapModel, 'update', async () => [1]);
+  await repository.actualizarDatosPersonales(12345678, {
+    dir_usu: 'Direccion', ciu_usu: 1, com_usu: 2, ema_usu: 'nuevo@example.com',
+  });
+  assert.equal(Object.hasOwn(update.mock.calls[0].arguments[0], 'ema_usu'), false);
 });

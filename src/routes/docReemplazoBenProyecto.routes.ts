@@ -3,7 +3,7 @@ import { docReemplazoBenProyectoController } from '../controllers/docReemplazoBe
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/rbac.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { uploadDocumentoReemplazo, uploadDocumentosReemplazoEnMemoria } from '../middlewares/upload.middleware';
+import { errorCargaDocumentoReemplazo, uploadDocumentoReemplazo, uploadDocumentosReemplazoEnMemoria } from '../middlewares/upload.middleware';
 import {
   crearDocReemplazoSchema,
   actualizarEstadoDocReemplazoSchema,
@@ -35,5 +35,7 @@ router.patch(
   uploadDocumentosReemplazoEnMemoria.single('archivo'),
   asyncHandler(docReemplazoBenProyectoController.reemplazarArchivo)
 );
+
+router.use(errorCargaDocumentoReemplazo);
 
 export default router;

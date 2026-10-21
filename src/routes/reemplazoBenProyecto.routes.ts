@@ -3,7 +3,7 @@ import { reemplazoBenProyectoController } from "../controllers/reemplazoBenProye
 import { requireAuth } from "../middlewares/auth.middleware";
 import { requirePermisos, requireRoles } from "../middlewares/rbac.middleware";
 import { validate } from "../middlewares/validate.middleware";
-import { uploadDocumentosReemplazoEnMemoria } from "../middlewares/upload.middleware";
+import { errorCargaDocumentoReemplazo, uploadDocumentosReemplazoEnMemoria } from "../middlewares/upload.middleware";
 import {
   crearReemplazoSchema,
   actualizarEstadoReemplazoSchema,
@@ -69,5 +69,7 @@ router.delete(
   requireRoles("ADMIN"),
   asyncHandler(reemplazoBenProyectoController.eliminar),
 );
+
+router.use(errorCargaDocumentoReemplazo);
 
 export default router;

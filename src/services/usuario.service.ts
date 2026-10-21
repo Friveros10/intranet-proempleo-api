@@ -66,8 +66,8 @@ function usuarioSeguro(usuario: UsuarioSicapModel) {
 }
 
 export const usuarioService = {
-  async listar() {
-    return usuarioSicapRepository.findAllPerfilesValidos();
+  async listar(page = 1) {
+    return usuarioSicapRepository.findAllPerfilesValidos(page);
   },
 
   async listarRoles() {
@@ -111,6 +111,7 @@ export const usuarioService = {
       nom_usu: data.nom_usu,
       pat_usu: data.pat_usu,
       mat_usu: data.mat_usu,
+      ema_usu: data.ema_usu,
       reg_usu: data.reg_usu,
       corr_rol: data.corr_rol,
       log_usu,
@@ -143,7 +144,6 @@ export const usuarioService = {
       dir_usu: data.dir_usu ?? null,
       ciu_usu: data.ciu_usu ?? null,
       com_usu: data.com_usu ?? null,
-      ema_usu: data.ema_usu ?? null,
     });
 
     const actualizado = await usuarioSicapRepository.findByRut(rutUsuario);
