@@ -11,7 +11,7 @@ export class RshService {
   private generateToken(): string {
     return jwt.sign(
       {
-        iss: "restrshInstituciones-QA",
+        iss: process.env.RSH_ISS,
       },
       this.secret,
       {
@@ -26,7 +26,7 @@ export class RshService {
     const { cuerpo: rut, dv } = formatearRut(rutFormateado);
 
     const { data } = await axios.post(
-      "https://api.ministeriodesarrollosocial.gob.cl/qa/restRSHInstitucionesQA",
+      process.env.RSH_URL!,
       {
         run: rut,
         dv: dv,
