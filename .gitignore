@@ -9,4 +9,5 @@ storage/documentos-auditoria/
 *.md
 cookies.txt
 .env.example
-/tests
+/tests/*
+!/tests/flujoReemplazo.test.cjs

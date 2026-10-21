@@ -4,7 +4,7 @@ import {
   CRITERIO_VALOR_MIN,
 } from "../constants/checklist.constants";
 
-const nuevoBeneficiarioSchema = z.object({
+export const nuevoBeneficiarioSchema = z.object({
   rut: z
     .string({ required_error: "El RUT del nuevo beneficiario es requerido" })
     .min(2),
@@ -27,7 +27,7 @@ const nuevoBeneficiarioSchema = z.object({
 
 // La solicitud llega como multipart/form-data (incluye los PDF adjuntos), por lo
 // que los campos anidados viajan como JSON serializado dentro de strings.
-function jsonField<T extends z.ZodTypeAny>(schema: T, mensajeInvalido: string) {
+export function jsonField<T extends z.ZodTypeAny>(schema: T, mensajeInvalido: string) {
   return z
     .string()
     .transform((valor, ctx) => {

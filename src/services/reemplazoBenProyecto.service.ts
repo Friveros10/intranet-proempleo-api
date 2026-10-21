@@ -35,14 +35,14 @@ const PERMISO_VER_TODAS_REGIONES = "REM_VERALL";
 const PERMISO_APROBAR = "REM_APROB";
 const PERMISO_RECHAZAR = "REM_RECHAZ";
 
-function puntajeRshAutomatico(puntaje: number | null): number | null {
+export function puntajeRshAutomatico(puntaje: number | null): number | null {
   if (puntaje === null || !Number.isFinite(puntaje)) return null;
   if (puntaje <= 40) return 100;
   if (puntaje <= 60) return 50;
   return 0;
 }
 
-function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | null {
+export function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | null {
   if (!fechaNacimiento || Number.isNaN(fechaNacimiento.getTime())) return null;
 
   const hoy = new Date();

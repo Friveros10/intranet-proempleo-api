@@ -476,7 +476,7 @@ export const beneficiarioRepository = {
     usu_cre: string;
     fec_cre: Date;
     statusFicha: number;
-  }): Promise<BeneficiarioProempleoModel> {
+  }, transaction?: Transaction): Promise<BeneficiarioProempleoModel> {
     // fecnac_ben llega como "DD-MM-YYYY"; se convierte a "YYYY-MM-DD" antes de armar el literal.
     const [dia, mes, anio] = data.fecnac_ben.split("-").map(Number);
     const fecnac_ben = `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
@@ -497,7 +497,7 @@ export const beneficiarioRepository = {
       fechaCreacion: sequelize.fn("GETDATE") as unknown as Date,
       status: 1,
       statusFicha: data.statusFicha,
-    });
+    }, { transaction });
     return creado;
   },
 

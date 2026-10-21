@@ -10,6 +10,7 @@ import wsRoutes from './ws.routes';
 import usuarioRoutes from './usuario.routes';
 import documentoAuditoriaRoutes from './documentoAuditoria.routes';
 import proyectoRoutes from './proyecto.routes';
+import reemplazoIndividualRoutes, { configuracionFlujoRoutes } from './flujoReemplazo.routes';
 
 const router = Router();
 
@@ -17,6 +18,8 @@ router.use('/auth', authRoutes);
 router.use('/audit', auditRoutes);
 router.use('/sicap', sicapRoutes);
 router.use('/reemplazos', reemplazoBenProyectoRoutes);
+router.use('/flujo-reemplazo', configuracionFlujoRoutes);
+router.use('/reemplazos-individuales', reemplazoIndividualRoutes);
 router.use('/documentos-reemplazo', docReemplazoBenProyectoRoutes);
 router.use('/beneficiarios', beneficiarioRoutes);
 router.use('/proyectos', proyectoRoutes);

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { reemplazoBenProyectoService } from "../services/reemplazoBenProyecto.service";
 import { AppError } from "../utils/AppError";
 import { ListarReemplazoQuery } from "../validations/reemplazoBenProyecto.validation";
+import { flujoReemplazoService } from "../services/flujoReemplazo.service";
 
 export const reemplazoBenProyectoController = {
   async listar(req: Request, res: Response): Promise<void> {
@@ -66,6 +67,10 @@ export const reemplazoBenProyectoController = {
       );
     }
     const archivos = (req.files as Express.Multer.File[]) ?? [];
+    const flujo = await flujoReemplazoService.actual(Number(req.user.sub));
+    if (flujo.status === 1) {
+      throw new AppError("La configuración de tu región cambió. Cierra y vuelve a abrir la solicitud.", 409);
+    }
     const reemplazo = await reemplazoBenProyectoService.crear(
       req.body,
       archivos,
