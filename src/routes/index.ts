@@ -11,6 +11,7 @@ import usuarioRoutes from './usuario.routes';
 import documentoAuditoriaRoutes from './documentoAuditoria.routes';
 import proyectoRoutes from './proyecto.routes';
 import reemplazoIndividualRoutes, { configuracionFlujoRoutes } from './flujoReemplazo.routes';
+import marcoRoutes from './marco.routes';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.use('/reemplazos-individuales', reemplazoIndividualRoutes);
 router.use('/documentos-reemplazo', docReemplazoBenProyectoRoutes);
 router.use('/beneficiarios', beneficiarioRoutes);
 router.use('/proyectos', proyectoRoutes);
+router.use('/marcos', marcoRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);

@@ -12,6 +12,7 @@
     "test:beneficiarios": "node -r ts-node/register/transpile-only --test tests/beneficiarios.test.cjs",
     "test:usuarios": "node -r ts-node/register/transpile-only --test tests/usuariosProempleo.test.cjs",
     "test:flujo-reemplazo": "node -r ts-node/register/transpile-only --test tests/flujoReemplazo.test.cjs",
+    "test:marcos": "node -r ts-node/register/transpile-only --test tests/marco.test.cjs",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts",

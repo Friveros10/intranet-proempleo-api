@@ -11,3 +11,4 @@ cookies.txt
 .env.example
 /tests/*
 !/tests/flujoReemplazo.test.cjs
+!/tests/marco.test.cjs

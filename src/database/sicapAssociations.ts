@@ -11,6 +11,8 @@ import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.
 import { RegionModel } from '../models/Region.model';
 import { CiudadModel } from '../models/Ciudad.model';
 import { ComunaModel } from '../models/Comuna.model';
+import { MarcoModel } from '../models/Marco.model';
+import { MarcoDetalleModel } from '../models/MarcoDetalle.model';
 
 /**
  * Define todas las relaciones (Sequelize) entre los modelos legacy SICAP y los
@@ -18,6 +20,12 @@ import { ComunaModel } from '../models/Comuna.model';
  * modelos (ver src/database/sequelize.ts / server.ts).
  */
 export function registrarAsociaciones(): void {
+  MarcoModel.hasMany(MarcoDetalleModel, {
+    foreignKey: 'corr_mar', sourceKey: 'corr_mar', as: 'detalles', constraints: false,
+  });
+  MarcoDetalleModel.belongsTo(MarcoModel, {
+    foreignKey: 'corr_mar', targetKey: 'corr_mar', as: 'marco', constraints: false,
+  });
   // Beneficiarios <-> BenPro
   BeneficiarioModel.hasMany(BenProModel, { foreignKey: 'rut_ben', sourceKey: 'rut_ben', as: 'benpros' });
   BenProModel.belongsTo(BeneficiarioModel, { foreignKey: 'rut_ben', targetKey: 'rut_ben', as: 'beneficiario' });
