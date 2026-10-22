@@ -13,6 +13,10 @@ import { CiudadModel } from '../models/Ciudad.model';
 import { ComunaModel } from '../models/Comuna.model';
 import { MarcoModel } from '../models/Marco.model';
 import { MarcoDetalleModel } from '../models/MarcoDetalle.model';
+import { DecretosHaciendaModel } from '../models/DecretosHacienda.model';
+import { DecretosHaciendaDetalleModel } from '../models/DecretosHaciendaDetalle.model';
+import { DecretosModel } from '../models/Decretos.model';
+import { DecretosDetalleModel } from '../models/DecretosDetalle.model';
 
 /**
  * Define todas las relaciones (Sequelize) entre los modelos legacy SICAP y los
@@ -20,6 +24,18 @@ import { MarcoDetalleModel } from '../models/MarcoDetalle.model';
  * modelos (ver src/database/sequelize.ts / server.ts).
  */
 export function registrarAsociaciones(): void {
+  DecretosModel.hasMany(DecretosDetalleModel, {
+    foreignKey: 'fol_dec', sourceKey: 'fol_dec', as: 'detalles', constraints: false,
+  });
+  DecretosDetalleModel.belongsTo(DecretosModel, {
+    foreignKey: 'fol_dec', targetKey: 'fol_dec', as: 'decreto', constraints: false,
+  });
+  DecretosHaciendaModel.hasMany(DecretosHaciendaDetalleModel, {
+    foreignKey: 'fol_dechac', sourceKey: 'fol_dechac', as: 'detalles', constraints: false,
+  });
+  DecretosHaciendaDetalleModel.belongsTo(DecretosHaciendaModel, {
+    foreignKey: 'fol_dechac', targetKey: 'fol_dechac', as: 'decreto', constraints: false,
+  });
   MarcoModel.hasMany(MarcoDetalleModel, {
     foreignKey: 'corr_mar', sourceKey: 'corr_mar', as: 'detalles', constraints: false,
   });

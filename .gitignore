@@ -12,3 +12,5 @@ cookies.txt
 /tests/*
 !/tests/flujoReemplazo.test.cjs
 !/tests/marco.test.cjs
+!/tests/decretosHacienda.test.cjs
+!/tests/decretos.test.cjs
