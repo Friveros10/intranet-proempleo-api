@@ -231,18 +231,46 @@ test('listado aplica region real, oculta checklist regional y conserva acceso al
   assert.equal(selector.mock.calls.length, 0);
 });
 
-test('checklist individual guarda puntaje sin elegir ganador ni aprobar/rechazar otros candidatos', async () => {
+test('checklist individual exige documentos aprobados y aprueba la solicitud al guardar', async () => {
   contexto();
-  mock.method(repo, 'obtener', async () => row());
+  const obtener = mock.method(repo, 'obtener', async () => row());
+  const documentos = mock.method(repo, 'documentos', async () => [
+    { get: () => ({ status: 'pendiente' }) },
+  ]);
   const actualizar = mock.method(repo, 'actualizar', async () => [1]);
   const statusBeneficiario = mock.method(beneficiarios, 'actualizarStatusPorResultadoReemplazo', async () => 0);
   const candidato = { id: 7, criterio_1: 100, criterio_2: 0, criterio_3: 0, criterio_4: 0, criterio_5: null };
+  await assert.rejects(service.checklist({ candidatos: [candidato] }, 1, req), /documentos deben estar aprobados/);
+  assert.equal(actualizar.mock.calls.length, 0);
+  documentos.mock.mockImplementation(async () =>
+    DOCUMENTOS_REEMPLAZO.map(() => ({ get: () => ({ status: 'aprobado' }) })));
   await service.checklist({ candidatos: [candidato] }, 1, req);
   const guardado = actualizar.mock.calls[0].arguments[1];
   assert.equal(guardado.criterio_2, 100);
-  assert.equal('status' in guardado, false);
+  assert.equal(guardado.status, 'aprobado');
+  assert.equal(guardado.comentarioRechazo, null);
+  assert.ok(guardado.fechaAprobacionReemplazo);
+  obtener.mock.mockImplementation(async () => ({ ...row(), status: 'aprobado' }));
+  await assert.rejects(service.checklist({ candidatos: [candidato] }, 1, req), /ya está resuelta/);
   assert.equal(statusBeneficiario.mock.calls.length, 0);
   await assert.rejects(service.checklist({ candidatos: [candidato, { ...candidato, id: 8 }] }, 1, req), /una sola solicitud/);
+});
+
+test('rechazo de emergencia admite solicitud individual aprobada y exige comentario; flujo A no cambia', async () => {
+  contexto();
+  const obtener = mock.method(repo, 'obtener', async () => ({ ...row(), status: 'aprobado' }));
+  const actualizar = mock.method(repo, 'actualizar', async () => [1]);
+  await assert.rejects(service.estado(7, 'rechazado', undefined, 1, req), /motivo del rechazo/);
+  await service.estado(7, 'rechazado', 'Revisión de emergencia', 1, req);
+  assert.equal(actualizar.mock.calls[0].arguments[1].status, 'rechazado');
+  assert.equal(actualizar.mock.calls[0].arguments[1].comentarioRechazo, 'Revisión de emergencia');
+  assert.ok(actualizar.mock.calls[0].arguments[1].fechaAprobacionReemplazo);
+
+  obtener.mock.mockImplementation(async () => ({
+    ...row(), flujo: 'A', status: 'aprobado',
+  }));
+  await assert.rejects(service.estado(7, 'rechazado', 'Motivo', 1, req), /ya está resuelta/);
+  assert.equal(actualizar.mock.calls.length, 1);
 });
 
 test('aprobacion individual exige documentos aprobados y checklist; no muta beneficiarios compartidos', async () => {

@@ -183,7 +183,12 @@ export const flujoReemplazoService = {
     if (!usuario.permisos.includes(status === "aprobado" ? "REM_APROB" : "REM_RECHAZ")) {
       throw new AppError("No tiene permisos para realizar esta acción", 403);
     }
-    if (row.status === "aprobado" || row.status === "rechazado") {
+    const rechazoEmergenciaIndividual =
+      row.flujo === "B" && row.status === "aprobado" && status === "rechazado";
+    if (
+      row.status === "rechazado" ||
+      (row.status === "aprobado" && !rechazoEmergenciaIndividual)
+    ) {
       throw new AppError("La solicitud ya está resuelta", 409);
     }
     if (status === "rechazado" && !comentario?.trim()) {
@@ -212,6 +217,14 @@ export const flujoReemplazoService = {
     if (data.candidatos.length !== 1) throw new AppError("El checklist debe evaluar una sola solicitud", 400);
     const candidato = data.candidatos[0];
     const row = await obtener(candidato.id, rut);
+    if (row.status === "aprobado" || row.status === "rechazado") {
+      throw new AppError("La solicitud ya está resuelta", 409);
+    }
+    const documentos = await repository.documentos(row.id);
+    if (documentos.length !== DOCUMENTOS_REEMPLAZO.length ||
+        documentos.some((doc) => doc.get().status !== "aprobado")) {
+      throw new AppError("Todos los documentos deben estar aprobados antes de guardar el checklist", 409);
+    }
     const criterio_2 = puntajeRshAutomatico(row.puntajeRsh) ?? candidato.criterio_2;
     const fecha = row.beneficiarioNuevo?.fecnac_ben;
     const criterio_3 = puntajeEdadAutomatico(fecha ? new Date(fecha) : null) ?? candidato.criterio_3;
@@ -222,8 +235,11 @@ export const flujoReemplazoService = {
         criterio_1: candidato.criterio_1, criterio_2, criterio_3, criterio_4,
         criterio_5: candidato.criterio_5 ?? null,
         ponderacion: candidato.criterio_1 + criterio_2 + criterio_3 + criterio_4,
+        status: "aprobado",
+        comentarioRechazo: null,
+        fechaAprobacionReemplazo: new Date().toISOString(),
       }, transaction);
-      await auditar(req, rut, "REEMPLAZO_INDIVIDUAL_CHECKLIST", row.id, row.proyecto?.reg_pro ?? null, "Checklist individual guardado", transaction);
+      await auditar(req, rut, "REEMPLAZO_INDIVIDUAL_CHECKLIST", row.id, row.proyecto?.reg_pro ?? null, "Checklist individual guardado; solicitud aprobada", transaction);
     });
     return [await obtener(row.id, rut)];
   },
