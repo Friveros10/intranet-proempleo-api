@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { decretosService as service } from '../services/decretos.service';
-import { listarDecretosSchema } from '../validations/decretos.validation';
+import { guardarDecretoSchema, listarDecretosSchema, obtenerDecretoSchema } from '../validations/decretos.validation';
 import { AppError } from '../utils/AppError';
 
 export const decretosController = {
@@ -21,6 +21,25 @@ export const decretosController = {
     res.json(await service.programas());
   },
   async obtener(req: Request, res: Response) {
-    res.json(await service.obtener(req.params.folio));
+    const { params, query } = obtenerDecretoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.obtener(params.folio, query.origen));
+  },
+  async glosas(req: Request, res: Response) {
+    res.json(await service.glosas(Number(req.params.id)));
+  },
+  async crear(req: Request, res: Response) {
+    const { body } = guardarDecretoSchema.parse({ body: req.body });
+    res.status(201).json(await service.crear(body, usuario(req)));
+  },
+  async actualizar(req: Request, res: Response) {
+    const { body } = guardarDecretoSchema.parse({ body: req.body });
+    res.json(await service.actualizar(req.params.folio, body, usuario(req)));
   },
 };
+
+function usuario(req: Request) {
+  if (!req.user || !/^\d{1,15}$/.test(req.user.sub) || !Number.isSafeInteger(Number(req.user.sub))) {
+    throw new AppError('Sesión inválida', 401);
+  }
+  return req.user.sub;
+}

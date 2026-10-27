@@ -46,8 +46,9 @@ export const decretosHaciendaService = {
       throw new AppError('Los detalles nuevos no deben incluir identificadores', 400);
     }
     return sequelize.transaction(async (transaction) => {
-      if (await repository.obtener(data.fol_dechac, 'proempleo', transaction)) {
-        throw new AppError('Ya existe un decreto de ProEmpleo con ese folio', 409);
+      if (await repository.obtener(data.fol_dechac, 'proempleo', transaction) ||
+        await repository.obtener(data.fol_dechac, 'legacy', transaction)) {
+        throw new AppError('Ya existe un decreto de Hacienda con ese folio', 409);
       }
       await validarProgramas(data, transaction);
       await repository.crear(data, usuario, transaction);

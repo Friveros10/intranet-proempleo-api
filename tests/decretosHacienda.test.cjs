@@ -225,6 +225,9 @@ test('crear rechaza folio duplicado, ID preasignado o programa no disponible ant
   await assert.rejects(service.crear(entrada(), '1'), /no está activo/);
   assert.equal(crear.mock.calls.length, 0);
   assert.equal(programa.mock.calls.length, 1);
+  obtener.mock.mockImplementation(async (_folio, origen) => origen === 'legacy' ? {} : null);
+  await assert.rejects(service.crear(entrada(), '1'), (err) => err.statusCode === 409);
+  assert.equal(crear.mock.calls.length, 0);
 });
 
 test('editar preserva IDs y programas historicos sin cambios; agrega, modifica y elimina detalles propios', async () => {
