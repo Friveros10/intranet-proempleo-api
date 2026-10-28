@@ -20,7 +20,11 @@ export const documentoAuditoriaRepository = {
          FROM dbo.documentos_auditoria a
          LEFT JOIN dbo.REGIONES r ON r.cod_region = a.idRegion
         WHERE ${filtro}
-        ORDER BY a.created_at DESC, a.id DESC
+        ORDER BY CASE
+          WHEN NULLIF(LTRIM(RTRIM(a.certCotizacionesUrl)), N'') IS NOT NULL
+           AND NULLIF(LTRIM(RTRIM(a.liquidacionUrl)), N'') IS NOT NULL THEN 0
+          ELSE 1
+        END, a.created_at DESC, a.id DESC
         OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`, {
         type: QueryTypes.SELECT,
         replacements: { ...replacements, offset, limit },
