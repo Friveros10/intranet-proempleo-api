@@ -14,6 +14,7 @@ import reemplazoIndividualRoutes, { configuracionFlujoRoutes } from './flujoReem
 import marcoRoutes from './marco.routes';
 import decretosHaciendaRoutes from './decretosHacienda.routes';
 import decretosRoutes from './decretos.routes';
+import intermediariosRoutes from './intermediarios.routes';
 
 const router = Router();
 
@@ -29,6 +30,7 @@ router.use('/proyectos', proyectoRoutes);
 router.use('/marcos', marcoRoutes);
 router.use('/decretos-hacienda', decretosHaciendaRoutes);
 router.use('/decretos', decretosRoutes);
+router.use('/intermediarios', intermediariosRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);
