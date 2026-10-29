@@ -303,6 +303,7 @@ export const reemplazoBenProyectoService = {
           nivedu_ben: candidato.beneficiario.educacion ?? null,
           usu_cre: String(rutUsuarioSolicitante),
           fec_cre: new Date(),
+          status: 0,
           statusFicha: 1,
         });
         // console.log("[reemplazoBenProyectoService.crear] beneficiario creado para rut:", candidato.cuerpo);

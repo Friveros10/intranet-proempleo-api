@@ -17,7 +17,7 @@ function id(req: Request) {
 
 function periodo(req: Request) {
   const dia = new Date().getDate();
-  if ((dia < 18 || dia > 28) && !usuario(req).roles.includes("ADMIN")) {
+  if ((dia < 18 || dia > 29) && !usuario(req).roles.includes("ADMIN")) {
     throw new AppError("Operación fuera del periodo habilitado", 403);
   }
 }

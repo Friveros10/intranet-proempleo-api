@@ -146,7 +146,7 @@ export const flujoReemplazoService = {
             dir_ben: candidato.direccion ?? null, reg_ben: proyecto.reg_pro,
             fecnac_ben: candidato.fechaNacimiento, sex_ben: candidato.genero ?? null,
             etn_ben: candidato.etnia ?? null, nivedu_ben: candidato.educacion ?? null,
-            usu_cre: String(rut), fec_cre: new Date(), statusFicha: 1,
+            usu_cre: String(rut), fec_cre: new Date(), status: 0, statusFicha: 1,
           }, transaction);
         }
         const solicitud = await repository.crear({
@@ -209,6 +209,11 @@ export const flujoReemplazoService = {
         status, comentarioRechazo: status === "rechazado" ? comentario?.trim() ?? null : null,
         fechaAprobacionReemplazo: status === "aprobado" || status === "rechazado" ? new Date().toISOString() : null,
       }, transaction);
+      if (status === "aprobado" || status === "rechazado") {
+        await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+          row.idBeneficiarioNuevo, status === "aprobado" ? 1 : 0, String(rut), transaction,
+        );
+      }
       await auditar(req, rut, "REEMPLAZO_INDIVIDUAL_ESTADO", id, row.proyecto?.reg_pro ?? null, comentario || `Solicitud ${status}`, transaction);
     });
     return obtener(id, rut);
@@ -239,6 +244,9 @@ export const flujoReemplazoService = {
         comentarioRechazo: null,
         fechaAprobacionReemplazo: new Date().toISOString(),
       }, transaction);
+      await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+        row.idBeneficiarioNuevo, 1, String(rut), transaction,
+      );
       await auditar(req, rut, "REEMPLAZO_INDIVIDUAL_CHECKLIST", row.id, row.proyecto?.reg_pro ?? null, "Checklist individual guardado; solicitud aprobada", transaction);
     });
     return [await obtener(row.id, rut)];

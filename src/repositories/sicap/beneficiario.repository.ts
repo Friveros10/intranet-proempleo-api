@@ -461,6 +461,8 @@ export const beneficiarioRepository = {
     return this.findProyectosByRut(rut_ben);
   },
 
+  // status 0 deja al candidato precargado pero oculto del listado; al aprobarse
+  // el reemplazo pasa a 1 y recien entonces se solicita completar su ficha.
   async createProempleo(data: {
     rut_ben: number;
     dig_ben: string;
@@ -475,6 +477,7 @@ export const beneficiarioRepository = {
     nivedu_ben?: string | null;
     usu_cre: string;
     fec_cre: Date;
+    status: number;
     statusFicha: number;
   }, transaction?: Transaction): Promise<BeneficiarioProempleoModel> {
     // fecnac_ben llega como "DD-MM-YYYY"; se convierte a "YYYY-MM-DD" antes de armar el literal.
@@ -495,7 +498,7 @@ export const beneficiarioRepository = {
       fechaNacimiento: fechaIsoLiteral(fecnac_ben) as unknown as Date,
       usuarioCreacion: data.usu_cre,
       fechaCreacion: sequelize.fn("GETDATE") as unknown as Date,
-      status: 1,
+      status: data.status,
       statusFicha: data.statusFicha,
     }, { transaction });
     return creado;
