@@ -1,14 +1,19 @@
-import { Transaction } from "sequelize";
+import { CreationAttributes, Transaction } from "sequelize";
 import { sequelize } from "../src/database/sequelize";
 import { AuditoriaBioBioModel } from "../src/models/AuditoriaBioBio.model";
 import { DocumentoAuditoriaModel } from "../src/models/DocumentoAuditoria.model";
 import { parseRut as separarRut } from "../src/utils/rut";
 
+// El RUT de origen es un string con rut y dv juntos ("12.345.678-5",
+// "12345678-5" o "04455671-5": los cuerpos de 7 dígitos vienen con un cero a
+// la izquierda). Se separa el último carácter como dv y el resto como rut
+// entero, descartando ese cero inicial.
 function parseRut(rutRaw: string): { rut: number; dv: string } | null {
   if (typeof rutRaw !== "string") return null;
   const limpio = rutRaw.replace(/[.\-\s]/g, "").toUpperCase();
-  if (!/^[1-9]\d{0,7}[\dK]$/.test(limpio)) return null;
+  if (!/^0*\d{1,8}[\dK]$/.test(limpio)) return null;
   const { cuerpo, dv } = separarRut(limpio);
+  if (cuerpo <= 0) return null;
   return { rut: cuerpo, dv };
 }
 
@@ -67,58 +72,99 @@ export async function up(): Promise<void> {
     const ID_REGION_BIOBIO = 8;
     const USUARIO_SISTEMA = 1;
     const existentes = await DocumentoAuditoriaModel.findAll({
-      attributes: ["RUT"],
+      attributes: ["RUT", "deleted_at"],
       where: { idRegion: ID_REGION_BIOBIO },
       paranoid: false,
       transaction: t,
     });
-    const rutsExistentes = new Set(
-      existentes.map((documento) => documento.getDataValue("RUT")),
-    );
+    // Clave de comparación: cuerpo del RUT. Se distingue activo de eliminado
+    // lógicamente para no revivir fichas borradas al actualizar.
+    const activos = new Set<number>();
+    const eliminados = new Set<number>();
+    for (const documento of existentes) {
+      const rut = documento.getDataValue("RUT");
+      if (documento.getDataValue("deleted_at")) {
+        eliminados.add(rut);
+      } else {
+        activos.add(rut);
+      }
+    }
     const rutsNuevos = new Set<number>();
-    let omitidos = 0;
+    let actualizados = 0;
+    let eliminadosOmitidos = 0;
     let duplicados = 0;
-    let invalidos = 0;
 
-    const nuevosDocumentos = listadoOrigen
-      .map((item) => {
-        const parsed = parseRut(item.RUT);
-        if (!parsed) {
-          invalidos += 1;
-          return null;
-        }
-        if (rutsExistentes.has(parsed.rut)) {
-          omitidos += 1;
-          return null;
-        }
+    const nuevosDocumentos: CreationAttributes<DocumentoAuditoriaModel>[] = [];
+    const actualizaciones: {
+      rut: number;
+      datos: {
+        dv: string;
+        nombres: string;
+        apellidoPaterno: string;
+        apellidoMaterno: string;
+        ong: string;
+        comuna: string;
+      };
+    }[] = [];
+
+    for (const item of listadoOrigen) {
+      const parsed = parseRut(item.RUT);
+      if (!parsed) {
+        continue;
+      }
+      const datos = {
+        dv: parsed.dv,
+        nombres: item.nombres ? item.nombres.trim() : "",
+        apellidoPaterno: item.pat ? item.pat.trim() : "",
+        apellidoMaterno: item.mat ? item.mat.trim() : "",
+        ong: item.ejecutor ? item.ejecutor.trim() : "",
+        comuna: item.comuna ? item.comuna.trim() : "",
+      };
+      if (activos.has(parsed.rut)) {
         if (rutsNuevos.has(parsed.rut)) {
           duplicados += 1;
-          return null;
+          continue;
         }
         rutsNuevos.add(parsed.rut);
+        actualizaciones.push({ rut: parsed.rut, datos });
+        continue;
+      }
+      if (eliminados.has(parsed.rut)) {
+        eliminadosOmitidos += 1;
+        continue;
+      }
+      if (rutsNuevos.has(parsed.rut)) {
+        duplicados += 1;
+        continue;
+      }
+      rutsNuevos.add(parsed.rut);
 
-        return {
-          RUT: parsed.rut,
-          dv: parsed.dv,
-          nombres: item.nombres ? item.nombres.trim() : "",
-          apellidoPaterno: item.pat ? item.pat.trim() : "",
-          apellidoMaterno: item.mat ? item.mat.trim() : "",
-          ong: item.ejecutor ? item.ejecutor.trim() : "",
-          comuna: item.comuna ? item.comuna.trim() : "",
-          idRegion: ID_REGION_BIOBIO,
-          certCotizacionesUrl: "",
-          liquidacionUrl: "",
-          certCotizacionesNombre: "",
-          liquidacionNombre: "",
-          estadoCert: "pendiente" as const,
-          estadoLiquidacion: "pendiente" as const,
-          created_at: ahora,
-          updated_at: ahora,
-          created_usr: USUARIO_SISTEMA,
-          updated_usr: USUARIO_SISTEMA,
-        };
-      })
-      .filter((doc): doc is NonNullable<typeof doc> => doc !== null);
+      nuevosDocumentos.push({
+        RUT: parsed.rut,
+        ...datos,
+        idRegion: ID_REGION_BIOBIO,
+        certCotizacionesUrl: "",
+        liquidacionUrl: "",
+        certCotizacionesNombre: "",
+        liquidacionNombre: "",
+        estadoCert: "pendiente",
+        estadoLiquidacion: "pendiente",
+        created_at: ahora,
+        updated_at: ahora,
+        created_usr: USUARIO_SISTEMA,
+        updated_usr: USUARIO_SISTEMA,
+      });
+    }
+
+    // Actualiza solo los datos personales de fichas activas; no toca PDF,
+    // estados, comentarios ni marcas de auditoría de documentos.
+    for (const { rut, datos } of actualizaciones) {
+      const [afectados] = await DocumentoAuditoriaModel.update(
+        { ...datos, updated_at: ahora, updated_usr: USUARIO_SISTEMA },
+        { where: { RUT: rut, idRegion: ID_REGION_BIOBIO }, transaction: t },
+      );
+      actualizados += afectados;
+    }
 
     const BATCH_SIZE = 500;
     const lotes = chunkArray(nuevosDocumentos, BATCH_SIZE);
@@ -130,15 +176,11 @@ export async function up(): Promise<void> {
       });
     }
 
-    if (invalidos > 0) {
-      console.warn(
-        `Se omitieron ${invalidos} registros de origen con RUT malformado.`,
-      );
-    }
     return (
       `Auditoría Biobío: ${nuevosDocumentos.length} insertados, ` +
-        `${omitidos} existentes omitidos, ${duplicados} duplicados de origen omitidos, ` +
-        `${invalidos} RUT malformados omitidos.`
+        `${actualizados} existentes actualizados, ` +
+        `${eliminadosOmitidos} eliminados omitidos, ` +
+        `${duplicados} duplicados de origen omitidos.`
     );
   });
   console.log(resumen);
