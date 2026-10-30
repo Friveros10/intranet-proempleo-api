@@ -1,4 +1,5 @@
-import { Op, Transaction, WhereOptions } from 'sequelize';
+import { Op, QueryTypes, Transaction, WhereOptions } from 'sequelize';
+import { sequelize } from '../database/sequelize';
 import { ReemplazoBenProyectoModel, ReemplazoStatus } from '../models/ReemplazoBenProyecto.model';
 import { DocReemplazoBenProyectoModel } from '../models/DocReemplazoBenProyecto.model';
 import { ProyectoModel } from '../models/Proyecto.model';
@@ -40,6 +41,59 @@ async function adjuntarBeneficiarios(
     dataValues.beneficiarioNuevo =
       resumenes.get(reemplazo.idBeneficiarioNuevo) ?? null;
   }
+}
+
+// Adjunta la entidad ejecutora de cada proyecto (PROYECTOS.ruteje_pro) a cada
+// reemplazo, resolviendo el nombre en el UNION de EJECUTORES (legacy) y
+// ejecutores_proempleo. Queda en dataValues.ejecutor para el informe de
+// resultado del proceso de selección.
+async function adjuntarEjecutores(
+  reemplazos: ReemplazoBenProyectoModel[],
+): Promise<void> {
+  const ruts = new Set<number>();
+  for (const reemplazo of reemplazos) {
+    const rut = parseRutEjecutor(rutejeProDe(reemplazo));
+    if (rut !== null) ruts.add(rut);
+  }
+  if (ruts.size === 0) return;
+
+  const ejecutores = await sequelize.query<{ rut_eje: number; nom_eje: string | null }>(
+    `SELECT rut_eje, nom_eje FROM (
+       SELECT rut_eje, nom_eje, 0 AS prioridad FROM dbo.ejecutores_proempleo
+       UNION ALL
+       SELECT rut_eje, nom_eje, 1 AS prioridad FROM dbo.EJECUTORES
+     ) e WHERE rut_eje IN (:ruts)
+     ORDER BY rut_eje, prioridad`,
+    { type: QueryTypes.SELECT, replacements: { ruts: [...ruts] } },
+  );
+  const porRut = new Map<number, string | null>();
+  for (const ejecutor of ejecutores) {
+    if (!porRut.has(ejecutor.rut_eje)) porRut.set(ejecutor.rut_eje, ejecutor.nom_eje);
+  }
+
+  for (const reemplazo of reemplazos) {
+    const dataValues = reemplazo.dataValues as unknown as Record<string, unknown>;
+    const rut = parseRutEjecutor(rutejeProDe(reemplazo));
+    dataValues.ejecutor =
+      rut !== null && porRut.has(rut) ? { rut_eje: rut, nom_eje: porRut.get(rut) } : null;
+  }
+}
+
+// El proyecto incluido queda en dataValues y no en la interfaz del modelo,
+// por lo que se lee con el mismo patrón que adjuntarBeneficiarios.
+function rutejeProDe(reemplazo: ReemplazoBenProyectoModel): string | number | null {
+  const proyecto = (reemplazo.dataValues as unknown as Record<string, unknown>)
+    .proyecto as { ruteje_pro?: string | number | null } | undefined;
+  return proyecto?.ruteje_pro ?? null;
+}
+
+// PROYECTOS.ruteje_pro puede venir como número (65064423) o texto ("12345678-9");
+// solo interesa la parte numérica del RUT para buscar en las tablas de ejecutores.
+function parseRutEjecutor(rutejePro: string | number | null | undefined): number | null {
+  if (rutejePro === null || rutejePro === undefined) return null;
+  const texto = String(rutejePro);
+  const rut = Number(texto.split('-')[0].replace(/\D/g, ''));
+  return Number.isInteger(rut) && rut > 0 ? rut : null;
 }
 
 export const reemplazoBenProyectoRepository = {
@@ -87,6 +141,7 @@ export const reemplazoBenProyectoRepository = {
       order: [['id', 'DESC']]
     });
     await adjuntarBeneficiarios(reemplazos);
+    await adjuntarEjecutores(reemplazos);
     return reemplazos;
   },
 
@@ -100,6 +155,7 @@ export const reemplazoBenProyectoRepository = {
     });
     if (reemplazo) {
       await adjuntarBeneficiarios([reemplazo]);
+      await adjuntarEjecutores([reemplazo]);
     }
     return reemplazo;
   },
@@ -144,6 +200,7 @@ export const reemplazoBenProyectoRepository = {
       order: [['id', 'ASC']],
     });
     await adjuntarBeneficiarios(reemplazos);
+    await adjuntarEjecutores(reemplazos);
     return reemplazos;
   },
 
