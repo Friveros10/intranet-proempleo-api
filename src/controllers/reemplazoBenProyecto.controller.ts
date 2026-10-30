@@ -5,11 +5,12 @@ import { ListarReemplazoQuery } from "../validations/reemplazoBenProyecto.valida
 import { flujoReemplazoService } from "../services/flujoReemplazo.service";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
 
-// Valida que hoy esté dentro del período habilitado de la región del usuario.
-// Los ADMIN no tienen restricción de período.
+// La validación de período solo aplica a INTENDENCIA (quienes crean y suben
+// solicitudes). MINISTERIO y ADMIN pueden revisar documentos de cualquier
+// región sin importar si su período está cerrado.
 async function validarPeriodo(req: Request): Promise<void> {
   if (!req.user) throw new AppError("No autenticado", 401);
-  if (req.user.roles.includes("ADMIN")) return;
+  if (req.user.roles.includes("ADMIN") || req.user.roles.includes("MINISTERIO")) return;
   const usuario = await usuarioSicapRepository.findByRut(Number(req.user.sub));
   const habilitado = await flujoReemplazoService.periodoHabilitado(usuario?.reg_usu ?? null);
   if (!habilitado) {

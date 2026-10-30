@@ -16,9 +16,12 @@ function id(req: Request) {
   return valor;
 }
 
+// La validación de período solo aplica a INTENDENCIA (quienes crean y suben
+// solicitudes). MINISTERIO y ADMIN pueden revisar documentos de cualquier
+// región sin importar si su período está cerrado.
 async function periodo(req: Request) {
   const { rut, roles } = usuario(req);
-  if (roles.includes("ADMIN")) return;
+  if (roles.includes("ADMIN") || roles.includes("MINISTERIO")) return;
   const usuarioActual = await usuarioSicapRepository.findByRut(rut);
   const habilitado = await service.periodoHabilitado(usuarioActual?.reg_usu ?? null);
   if (!habilitado) {
