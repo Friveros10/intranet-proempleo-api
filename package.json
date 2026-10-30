@@ -12,6 +12,7 @@
     "test:beneficiarios": "node -r ts-node/register/transpile-only --test tests/beneficiarios.test.cjs",
     "test:usuarios": "node -r ts-node/register/transpile-only --test tests/usuariosProempleo.test.cjs",
     "test:flujo-reemplazo": "node -r ts-node/register/transpile-only --test tests/flujoReemplazo.test.cjs",
+    "test:ejecutores": "node -r ts-node/register/transpile-only --test tests/ejecutores.test.cjs",
     "test:marcos": "node -r ts-node/register/transpile-only --test tests/marco.test.cjs",
     "test:decretos-hacienda": "node -r ts-node/register/transpile-only --test tests/decretosHacienda.test.cjs",
     "test:decretos": "node -r ts-node/register/transpile-only --test tests/decretos.test.cjs",

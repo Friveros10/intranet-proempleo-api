@@ -38,8 +38,10 @@ export type ResponsableListado = Omit<Responsables, 'usu_cre' | 'fec_cre' | 'usu
 type Fila = IntermediarioListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 
 export const intermediariosRepository = {
-  async listar({ region, comuna, page }: ListarIntermediariosQuery) {
+  async listar({ rut, region, comuna, page }: ListarIntermediariosQuery) {
     const filtros = [
+      "(Est_int IS NULL OR RTRIM(Est_int) <> 'ELIMINADO')",
+      ...(rut === undefined ? [] : ['rut_int = :rut']),
       ...(region === undefined ? [] : ['reg_int = :region']),
       ...(comuna === undefined ? [] : ['com_int = :comuna']),
     ];
@@ -58,7 +60,7 @@ export const intermediariosRepository = {
       LEFT JOIN dbo.COMUNAS co ON co.cod_com = n.com_int
       ORDER BY n.fila`, {
       type: QueryTypes.SELECT,
-      replacements: { region, comuna, pagina: page, limite: LIMIT },
+      replacements: { rut, region, comuna, pagina: page, limite: LIMIT },
     });
     const meta = rows[0];
     const data = rows.filter((row) => row.fila !== null).map(({ total, totalPages, pagina, fila, ...intermediario }) => intermediario);

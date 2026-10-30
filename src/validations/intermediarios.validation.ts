@@ -13,6 +13,7 @@ const email = (max: number) => z.string().trim().max(max)
 
 export const listarIntermediariosSchema = z.object({
   query: z.object({
+    rut: z.coerce.number().int().positive().max(2147483647).optional(),
     region: id.optional(),
     comuna: id.optional(),
     page: z.coerce.number().int().positive().default(1),
