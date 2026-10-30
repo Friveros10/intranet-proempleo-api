@@ -4,7 +4,7 @@ import { requireAuth } from "../middlewares/auth.middleware";
 import { requirePermisos, requireRoles } from "../middlewares/rbac.middleware";
 import { validate } from "../middlewares/validate.middleware";
 import { asyncHandler } from "../utils/asyncHandler";
-import { configurarFlujoSchema, crearReemplazoIndividualSchema } from "../validations/flujoReemplazo.validation";
+import { configurarFlujoSchema, configurarPeriodoSchema, crearReemplazoIndividualSchema } from "../validations/flujoReemplazo.validation";
 import { actualizarChecklistReemplazoSchema, actualizarEstadoReemplazoSchema, listarReemplazoSchema } from "../validations/reemplazoBenProyecto.validation";
 import { actualizarEstadoDocReemplazoSchema } from "../validations/docReemplazoBenProyecto.validation";
 import { errorCargaDocumentoReemplazo, uploadDocumentosReemplazoEnMemoria } from "../middlewares/upload.middleware";
@@ -15,6 +15,7 @@ configuracionFlujoRoutes.use(requireAuth);
 configuracionFlujoRoutes.get("/actual", requirePermisos("REM_CREAR"), asyncHandler(controller.actual));
 configuracionFlujoRoutes.get("/", requireRoles("ADMIN"), asyncHandler(controller.configuraciones));
 configuracionFlujoRoutes.put("/:idRegion", requireRoles("ADMIN"), validate(configurarFlujoSchema), asyncHandler(controller.configurar));
+configuracionFlujoRoutes.put("/:idRegion/periodo", requireRoles("ADMIN"), validate(configurarPeriodoSchema), asyncHandler(controller.configurarPeriodo));
 
 const router = Router();
 router.use(requireAuth);

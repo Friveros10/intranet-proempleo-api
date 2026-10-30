@@ -3,6 +3,19 @@ import { reemplazoBenProyectoService } from "../services/reemplazoBenProyecto.se
 import { AppError } from "../utils/AppError";
 import { ListarReemplazoQuery } from "../validations/reemplazoBenProyecto.validation";
 import { flujoReemplazoService } from "../services/flujoReemplazo.service";
+import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
+
+// Valida que hoy esté dentro del período habilitado de la región del usuario.
+// Los ADMIN no tienen restricción de período.
+async function validarPeriodo(req: Request): Promise<void> {
+  if (!req.user) throw new AppError("No autenticado", 401);
+  if (req.user.roles.includes("ADMIN")) return;
+  const usuario = await usuarioSicapRepository.findByRut(Number(req.user.sub));
+  const habilitado = await flujoReemplazoService.periodoHabilitado(usuario?.reg_usu ?? null);
+  if (!habilitado) {
+    throw new AppError("Operación fuera del periodo habilitado", 403);
+  }
+}
 
 export const reemplazoBenProyectoController = {
   async listar(req: Request, res: Response): Promise<void> {
@@ -56,16 +69,7 @@ export const reemplazoBenProyectoController = {
     if (!req.user) {
       throw new AppError("No autenticado", 401);
     }
-    const hoy = new Date();
-    const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
-    //si periodoHabilitado es true o el usuario es ADMIN, se permite crear reemplazo
-    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
-      throw new AppError(
-        "No se puede crear Reemplazo de Cupo fuera del periodo habilitado",
-        403,
-      );
-    }
+    await validarPeriodo(req);
     const archivos = (req.files as Express.Multer.File[]) ?? [];
     const flujo = await flujoReemplazoService.actual(Number(req.user.sub));
     if (flujo.status === 1) {
@@ -86,16 +90,7 @@ export const reemplazoBenProyectoController = {
     if (!req.user) {
       throw new AppError("No autenticado", 401);
     }
-    const hoy = new Date();
-    const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
-    //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar estado
-    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
-      throw new AppError(
-        "No se puede actualizar el estado fuera del periodo habilitado",
-        403,
-      );
-    }
+    await validarPeriodo(req);
     const reemplazo = await reemplazoBenProyectoService.actualizarEstado(
       Number(req.params.id),
       req.body.status,
@@ -119,16 +114,7 @@ export const reemplazoBenProyectoController = {
     if (!req.user) {
       throw new AppError("No autenticado", 401);
     }
-    const hoy = new Date();
-    const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
-    //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar checklist
-    if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
-      throw new AppError(
-        "No se puede actualizar el checklist fuera del periodo habilitado",
-        403,
-      );
-    }
+    await validarPeriodo(req);
     const reemplazos = await reemplazoBenProyectoService.actualizarChecklist(
       req.body,
       Number(req.user.sub),

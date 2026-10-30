@@ -63,11 +63,16 @@ export const flujoReemplazoService = {
     const [regiones, configuraciones] = await Promise.all([
       regionRepository.findRegionesActivas(), repository.configuraciones(),
     ]);
-    return regiones.map((region) => ({
-      ...region,
-      idRegion: region.cod_region,
-      status: configuraciones.find((item) => item.idRegion === region.cod_region)?.status ?? 0,
-    }));
+    return regiones.map((region) => {
+      const config = configuraciones.find((item) => item.idRegion === region.cod_region);
+      return {
+        ...region,
+        idRegion: region.cod_region,
+        status: config?.status ?? 0,
+        fechaDesde: config?.fechaDesde ?? 20,
+        fechaHasta: config?.fechaHasta ?? 28,
+      };
+    });
   },
   async configurar(idRegion: number, status: number, rut: number, req: Request) {
     const regiones = await regionRepository.findRegionesActivas();
@@ -80,10 +85,37 @@ export const flujoReemplazoService = {
       return resultado;
     });
   },
+  async configurarPeriodo(idRegion: number, fechaDesde: number, fechaHasta: number, rut: number, req: Request) {
+    const regiones = await regionRepository.findRegionesActivas();
+    if (!regiones.some((region) => region.cod_region === idRegion)) {
+      throw new AppError("La región no está activa", 400);
+    }
+    if (fechaDesde > fechaHasta) {
+      throw new AppError("El día de inicio no puede ser mayor que el día de término", 400);
+    }
+    return sequelize.transaction(async (transaction) => {
+      const resultado = await repository.configurarPeriodo(idRegion, fechaDesde, fechaHasta, transaction);
+      await auditar(req, rut, "FLUJO_REEMPLAZO_CONFIGURADO", idRegion, idRegion, `Período regional: ${fechaDesde} al ${fechaHasta}`, transaction);
+      return resultado;
+    });
+  },
   async actual(rut: number) {
     const usuario = await contexto(rut);
     const config = usuario.region ? await repository.configuracion(usuario.region) : null;
-    return { idRegion: usuario.region, status: config?.status === 1 ? 1 : 0 };
+    return {
+      idRegion: usuario.region,
+      status: config?.status === 1 ? 1 : 0,
+      fechaDesde: config?.fechaDesde ?? 20,
+      fechaHasta: config?.fechaHasta ?? 28,
+    };
+  },
+  // Indica si hoy está dentro del período habilitado de la región. Si la región
+  // no tiene registro en la tabla, se crea con los valores por defecto (20-28).
+  async periodoHabilitado(idRegion: number | null): Promise<boolean> {
+    if (!idRegion) return false;
+    const config = await repository.configuracion(idRegion);
+    const dia = new Date().getDate();
+    return dia >= config.fechaDesde && dia <= config.fechaHasta;
   },
   async listar(filtros: ReemplazoFiltros, rut: number, roles: string[]) {
     const usuario = await contexto(rut);

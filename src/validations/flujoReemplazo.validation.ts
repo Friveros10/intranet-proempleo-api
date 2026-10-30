@@ -6,6 +6,14 @@ export const configurarFlujoSchema = z.object({
   body: z.object({ status: z.union([z.literal(0), z.literal(1)]) }).strict(),
 });
 
+export const configurarPeriodoSchema = z.object({
+  params: z.object({ idRegion: z.coerce.number().int().positive() }),
+  body: z.object({
+    fechaDesde: z.coerce.number().int().min(1).max(31),
+    fechaHasta: z.coerce.number().int().min(1).max(31),
+  }).strict(),
+});
+
 export const crearReemplazoIndividualSchema = z.object({
   body: z.object({
     cupoCobertura: z.preprocess(

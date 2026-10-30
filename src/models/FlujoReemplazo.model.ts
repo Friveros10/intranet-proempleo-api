@@ -8,16 +8,22 @@ import { UsuarioSicapModel } from "./UsuarioSicap.model";
 export interface FlujoRegional {
   idRegion: number;
   status: number;
+  fechaDesde: number;
+  fechaHasta: number;
 }
 
 export class FlujoReemplazoModel extends Model<FlujoRegional> {
   declare idRegion: number;
   declare status: number;
+  declare fechaDesde: number;
+  declare fechaHasta: number;
 }
 
 FlujoReemplazoModel.init({
   idRegion: { type: DataTypes.INTEGER, primaryKey: true },
   status: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, validate: { isIn: [[0, 1]] } },
+  fechaDesde: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 20, validate: { min: 1, max: 31 } },
+  fechaHasta: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 28, validate: { min: 1, max: 31 } },
 }, { sequelize, tableName: "flujo_reemplazo_proempleo", schema: "dbo", timestamps: false });
 
 type CreacionIndividual = Optional<ReemplazoBenProyecto,

@@ -40,12 +40,28 @@ export const flujoReemplazoRepository = {
   configuraciones() {
     return FlujoReemplazoModel.findAll();
   },
-  configuracion(idRegion: number) {
-    return FlujoReemplazoModel.findByPk(idRegion);
+  // Si la región no tiene registro, se crea con los valores por defecto
+  // (status 0, período 20-28) para que siempre exista configuración.
+  async configuracion(idRegion: number, transaction?: Transaction) {
+    const [config] = await FlujoReemplazoModel.findOrCreate({
+      where: { idRegion },
+      defaults: { idRegion, status: 0, fechaDesde: 20, fechaHasta: 28 },
+      transaction,
+    });
+    return config;
   },
   async configurar(idRegion: number, status: number, transaction?: Transaction) {
-    await FlujoReemplazoModel.upsert({ idRegion, status }, { transaction });
+    const config = await this.configuracion(idRegion, transaction);
+    config.status = status;
+    await config.save({ transaction });
     return { idRegion, status };
+  },
+  async configurarPeriodo(idRegion: number, fechaDesde: number, fechaHasta: number, transaction?: Transaction) {
+    const config = await this.configuracion(idRegion, transaction);
+    config.fechaDesde = fechaDesde;
+    config.fechaHasta = fechaHasta;
+    await config.save({ transaction });
+    return { idRegion, fechaDesde, fechaHasta };
   },
   async listar(filtros: ReemplazoFiltros) {
     const where: WhereOptions<ReemplazoBenProyecto> = {};
