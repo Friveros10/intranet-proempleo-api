@@ -58,7 +58,7 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 18 && diaActual <= 29;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite crear reemplazo
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
@@ -88,7 +88,7 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 18 && diaActual <= 29;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar estado
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
@@ -121,7 +121,7 @@ export const reemplazoBenProyectoController = {
     }
     const hoy = new Date();
     const diaActual = hoy.getDate();
-    const periodoHabilitado = diaActual >= 18 && diaActual <= 29;
+    const periodoHabilitado = diaActual >= 1 && diaActual <= 31;
     //si periodoHabilitado es true o el usuario es ADMIN, se permite actualizar checklist
     if (!periodoHabilitado && !req.user.roles.includes("ADMIN")) {
       throw new AppError(
