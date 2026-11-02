@@ -16,6 +16,7 @@ import decretosHaciendaRoutes from './decretosHacienda.routes';
 import decretosRoutes from './decretos.routes';
 import intermediariosRoutes from './intermediarios.routes';
 import ejecutoresRoutes from './ejecutores.routes';
+import condocRoutes from './condoc.routes';
 
 const router = Router();
 
@@ -33,6 +34,7 @@ router.use('/decretos-hacienda', decretosHaciendaRoutes);
 router.use('/decretos', decretosRoutes);
 router.use('/intermediarios', intermediariosRoutes);
 router.use('/ejecutores', ejecutoresRoutes);
+router.use('/condoc', condocRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);
