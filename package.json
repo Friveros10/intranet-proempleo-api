@@ -17,6 +17,7 @@
     "test:decretos-hacienda": "node -r ts-node/register/transpile-only --test tests/decretosHacienda.test.cjs",
     "test:decretos": "node -r ts-node/register/transpile-only --test tests/decretos.test.cjs",
     "test:condoc": "node -r ts-node/register/transpile-only --test tests/condoc.test.cjs",
+    "test:oficio-cobertura": "node -r ts-node/register/transpile-only --test tests/oficioCobertura.test.cjs",
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "seed:reemplazo-roles": "ts-node --transpile-only seeders/202609210001-reemplazo-roles-permisos.ts",

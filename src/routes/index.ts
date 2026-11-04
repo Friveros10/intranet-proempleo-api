@@ -17,6 +17,7 @@ import decretosRoutes from './decretos.routes';
 import intermediariosRoutes from './intermediarios.routes';
 import ejecutoresRoutes from './ejecutores.routes';
 import condocRoutes from './condoc.routes';
+import oficioCoberturaRoutes from './oficioCobertura.routes';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ router.use('/decretos', decretosRoutes);
 router.use('/intermediarios', intermediariosRoutes);
 router.use('/ejecutores', ejecutoresRoutes);
 router.use('/condoc', condocRoutes);
+router.use('/oficio-cobertura', oficioCoberturaRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);
