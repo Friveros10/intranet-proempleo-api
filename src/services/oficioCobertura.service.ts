@@ -60,15 +60,15 @@ export const oficioCoberturaService = {
   },
 
   async guardarCoberturas(data: GuardarCoberturasInput) {
-    if (!await repository.marcoDisponible(data.corr_mar, data.ano_ofi)) {
-      throw new AppError('El programa no está activo o no pertenece al año seleccionado', 400);
-    }
+    // Cada cobertura lleva su propio período (ano_ofi, mesDesde, mesHasta).
     for (const cobertura of data.coberturas) {
+      if (!await repository.marcoDisponible(data.corr_mar, cobertura.ano_ofi)) {
+        throw new AppError('El programa no está activo o no pertenece al año seleccionado', 400);
+      }
       if (!await repository.comunaValida(cobertura.cod_reg, cobertura.cod_ciu, cobertura.cod_com)) {
         throw new AppError('La comuna no pertenece a la provincia y región seleccionadas', 400);
       }
     }
-    const meses = Array.from({ length: data.mesHasta - data.mesDesde + 1 }, (_, indice) => data.mesDesde + indice);
     await sequelize.transaction(async (transaction) => {
       const ordinario = await repository.buscarOrdinario(data.ord_ofi, transaction);
       if (!ordinario) throw new AppError('No existe un ordinario con ese folio', 404);
@@ -80,16 +80,18 @@ export const oficioCoberturaService = {
           }
         }
       }
-      const ocupadas = new Set(
-        (await repository.coberturasExistentes(data.ord_ofi, transaction))
-          .filter((item) => item.ano_ofi === data.ano_ofi)
-          .map((item) => clave(item.cod_com, item.jor_ofi, item.tip_ofi, item.Mes_ofi ?? 0, data.ano_ofi)),
-      );
+      const existentes = await repository.coberturasExistentes(data.ord_ofi, transaction);
       const vistas = new Set<string>();
       const conflictos: number[] = [];
       data.coberturas.forEach((cobertura, indice) => {
+        const meses = Array.from({ length: cobertura.mesHasta - cobertura.mesDesde + 1 }, (_, i) => cobertura.mesDesde + i);
+        const ocupadas = new Set(
+          existentes
+            .filter((item) => item.ano_ofi === cobertura.ano_ofi)
+            .map((item) => clave(item.cod_com, item.jor_ofi, item.tip_ofi, item.Mes_ofi ?? 0, cobertura.ano_ofi)),
+        );
         const repetida = meses.some((mes) => {
-          const key = clave(cobertura.cod_com, cobertura.jor_ofi, cobertura.tip_ofi, mes, data.ano_ofi);
+          const key = clave(cobertura.cod_com, cobertura.jor_ofi, cobertura.tip_ofi, mes, cobertura.ano_ofi);
           if (ocupadas.has(key) || vistas.has(key)) return true;
           vistas.add(key);
           return false;
@@ -103,7 +105,7 @@ export const oficioCoberturaService = {
           { conflictos },
         );
       }
-      await repository.guardarCoberturas(data.ord_ofi, data, [...meses], transaction);
+      await repository.guardarCoberturas(data.ord_ofi, data, transaction);
     });
     return { coberturas: await repository.coberturas(data.ord_ofi) };
   },

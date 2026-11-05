@@ -164,8 +164,9 @@ export const oficioCoberturaRepository = {
     { type: QueryTypes.SELECT, replacements: { folio }, transaction });
   },
 
-  async guardarCoberturas(folio: string, data: GuardarCoberturasInput, meses: number[], transaction: Transaction) {
+  async guardarCoberturas(folio: string, data: GuardarCoberturasInput, transaction: Transaction) {
     for (const cobertura of data.coberturas) {
+      const meses = Array.from({ length: cobertura.mesHasta - cobertura.mesDesde + 1 }, (_, i) => cobertura.mesDesde + i);
       for (const mes of meses) {
         await sequelize.query(`
           INSERT INTO dbo.oficiocob_proempleo
@@ -173,7 +174,7 @@ export const oficioCoberturaRepository = {
           VALUES
             (:folio, :corr_mar, :mes, :ano, :region, :ciudad, :comuna, :jornada, :tipo, :beneficiarios, 0)`, {
           replacements: {
-            folio, corr_mar: data.corr_mar, mes, ano: data.ano_ofi,
+            folio, corr_mar: data.corr_mar, mes, ano: cobertura.ano_ofi,
             region: cobertura.cod_reg, ciudad: cobertura.cod_ciu, comuna: cobertura.cod_com,
             jornada: cobertura.jor_ofi, tipo: cobertura.tip_ofi, beneficiarios: cobertura.ben_ofi,
           },

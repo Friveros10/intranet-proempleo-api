@@ -40,9 +40,6 @@ export const guardarCoberturasSchema = z.object({
   body: z.object({
     ord_ofi: folio,
     corr_mar: z.number().int().positive().max(2147483647),
-    ano_ofi: z.number().int().min(1900).max(9998),
-    mesDesde: z.number().int().min(1).max(12),
-    mesHasta: z.number().int().min(1).max(12),
     coberturas: z.array(z.object({
       cod_reg: z.number().int().positive().max(2147483647),
       cod_ciu: z.number().int().positive().max(2147483647),
@@ -50,11 +47,16 @@ export const guardarCoberturasSchema = z.object({
       jor_ofi: z.enum(JORNADAS_OFICIO),
       tip_ofi: z.enum(TIPOS_OFICIO),
       ben_ofi: z.number().int().min(0).max(2147483647),
+      ano_ofi: z.number().int().min(1900).max(9998),
+      mesDesde: z.number().int().min(1).max(12),
+      mesHasta: z.number().int().min(1).max(12),
     }).strict()).min(1).max(500),
   }).strict().superRefine((data, ctx) => {
-    if (data.mesHasta < data.mesDesde) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mesHasta'], message: 'El mes hasta no puede ser anterior al mes desde' });
-    }
+    data.coberturas.forEach((cobertura, indice) => {
+      if (cobertura.mesHasta < cobertura.mesDesde) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['coberturas', indice, 'mesHasta'], message: 'El mes hasta no puede ser anterior al mes desde' });
+      }
+    });
   }),
 });
 
