@@ -46,6 +46,7 @@ router.get('/proximo-folio', admin, asyncHandler(controller.proximoFolio));
 router.post('/', admin, validate(guardarProyectoSchema), asyncHandler(controller.crear));
 router.put('/proempleo/:folio', admin, validate(obtenerProyectoSchema), validate(guardarProyectoSchema), asyncHandler(controller.actualizar));
 router.delete('/proempleo/:folio', admin, validate(eliminarProyectoSchema), asyncHandler(controller.eliminar));
+router.get('/:folio/gastos', admin, validate(obtenerProyectoSchema), asyncHandler(controller.gastos));
 router.get('/:folio', admin, validate(obtenerProyectoSchema), asyncHandler(controller.obtener));
 
 export default router;

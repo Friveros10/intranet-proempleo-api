@@ -67,6 +67,10 @@ export const proyectosController = {
     const { params, query } = obtenerProyectoSchema.parse({ params: req.params, query: req.query });
     res.json(await service.obtener(params.folio, query.origen));
   },
+  async gastos(req: Request, res: Response) {
+    const { params, query } = obtenerProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.gastos(params.folio, query.origen));
+  },
   async crear(req: Request, res: Response) {
     const { body } = guardarProyectoSchema.parse({ body: req.body });
     res.status(201).json(await service.crear(body, usuario(req)));

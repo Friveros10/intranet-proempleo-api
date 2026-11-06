@@ -34,6 +34,20 @@ function nombreDetalleGasto(id: number): string | null {
   return DetalleDeGastos.find((detalle) => detalle.id === id)?.nombre_detalle.trim() ?? null;
 }
 
+/**
+ * La distribución se persiste completa, igual que la grilla legacy: cada ítem
+ * del catálogo tiene una fila en proitemgas_proempleo, incluso si su monto es 0.
+ * Esto evita proyectos sin detalle cuando el usuario no abre el modal de gastos.
+ */
+function completarDistribucionGastos(gastos: GuardarProyectoInput['gastos']): GuardarProyectoInput['gastos'] {
+  const montos = new Map(gastos.map((gasto) => [gasto.corr_itemGas, gasto]));
+  return DetalleDeGastos.map((detalle) => ({
+    corr_itemGas: detalle.id,
+    mon_proitemgas: montos.get(detalle.id)?.mon_proitemgas ?? '0',
+    compaGas: montos.get(detalle.id)?.compaGas ?? '0',
+  }));
+}
+
 function rutValidado(rutFormateado: string) {
   const rut = parseRut(rutFormateado);
   if (calcularDv(rut.cuerpo) !== rut.dv) {
@@ -122,6 +136,17 @@ export const proyectosService = {
     return repository.proximoFolio();
   },
 
+  async gastos(folio: number, origen: OrigenMarco = 'legacy') {
+    const proyecto = await repository.obtener(folio, origen);
+    if (!proyecto) throw new AppError('Proyecto no encontrado', 404);
+    return proyecto.gastos.map((gasto) => ({
+      ...gasto,
+      nombre: origen === 'proempleo'
+        ? nombreDetalleGasto(gasto.corr_itemGas)
+        : gasto.nombre,
+    }));
+  },
+
   async obtener(folio: number, origen: OrigenMarco = 'legacy', transaction?: Transaction) {
     const proyecto = await repository.obtener(folio, origen, transaction);
     if (!proyecto) throw new AppError('Proyecto no encontrado', 404);
@@ -136,6 +161,7 @@ export const proyectosService = {
 
   async crear(data: GuardarProyectoInput, usuario: string) {
     const nombre = nombreBanco(data.banco_pro);
+    const gastos = completarDistribucionGastos(data.gastos);
     await validarReferencias(data);
     const meses = mesesAproximados(data.fecini_pro, data.fecter_pro);
     return sequelize.transaction(async (transaction) => {
@@ -143,7 +169,12 @@ export const proyectosService = {
         throw new AppError('Ya existe un proyecto con ese folio', 409);
       }
       await repository.crear(data, nombre, meses, usuario, transaction);
-      await repository.reemplazarGastos(data.fol_pro, data.gastos, transaction);
+      await repository.reemplazarGastos(data.fol_pro, gastos, {
+        anio: data.ano_pro,
+        mes: Number(data.fecini_pro.slice(5, 7)),
+        region: data.reg_pro,
+        usuario,
+      }, transaction);
       return this.obtener(data.fol_pro, 'proempleo', transaction);
     });
   },
@@ -151,6 +182,7 @@ export const proyectosService = {
   async actualizar(folioParam: number, data: GuardarProyectoInput, usuario: string) {
     if (data.fol_pro !== folioParam) throw new AppError('El folio no se puede modificar', 400);
     const nombre = nombreBanco(data.banco_pro);
+    const gastos = completarDistribucionGastos(data.gastos);
     await validarReferencias(data);
     const meses = mesesAproximados(data.fecini_pro, data.fecter_pro);
     return sequelize.transaction(async (transaction) => {
@@ -159,7 +191,12 @@ export const proyectosService = {
         throw new AppError('Proyecto no encontrado para modificar', 404);
       }
       await repository.actualizar(folioParam, data, nombre, meses, usuario, transaction);
-      await repository.reemplazarGastos(folioParam, data.gastos, transaction);
+      await repository.reemplazarGastos(folioParam, gastos, {
+        anio: data.ano_pro,
+        mes: Number(data.fecini_pro.slice(5, 7)),
+        region: data.reg_pro,
+        usuario,
+      }, transaction);
       return this.obtener(folioParam, 'proempleo', transaction);
     });
   },

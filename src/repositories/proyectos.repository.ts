@@ -73,6 +73,7 @@ export type GastoProyecto = {
   corr_itemGas: number;
   nombre: string | null;
   mon_proitemgas: string;
+  compaGas: string;
   obs_proitemgas: string | null;
 };
 
@@ -194,16 +195,34 @@ export const proyectosRepository = {
   async gastos(folio: number, origen: OrigenMarco, transaction?: Transaction): Promise<GastoProyecto[]> {
     if (origen === 'proempleo') {
       return sequelize.query<GastoProyecto>(`
-        SELECT g.corr_itemGas, NULL AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas, g.obs_proitemgas
+        SELECT g.corr_itemGas, NULL AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas,
+          CAST(COALESCE((
+            SELECT SUM(r.mon_detren) FROM dbo.detrendicion_proempleo r
+            WHERE r.fol_pro = g.fol_pro AND r.corr_itemGas = g.corr_itemGas
+          ), 0) AS VARCHAR(18)) AS compaGas,
+          g.obs_proitemgas
         FROM dbo.proitemgas_proempleo g WHERE g.fol_pro = :folio ORDER BY g.corr_itemGas`, {
         type: QueryTypes.SELECT, replacements: { folio }, transaction,
       });
     }
+    // Replica la consulta de la intranet legacy: el marco define qué ítems se
+    // muestran, aunque el proyecto todavía no tenga un monto asignado para ellos.
     return sequelize.query<GastoProyecto>(`
-      SELECT g.corr_itemGas, i.nom_itemGas AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas, g.obs_proitemgas
-      FROM dbo.PROITEMGAS g
-      LEFT JOIN dbo.ITEMGASTOS i ON i.corr_itemGas = g.corr_itemGas
-      WHERE g.fol_pro = :folio ORDER BY g.corr_itemGas`, {
+      SELECT t1.corr_itemGas, RTRIM(t1.nom_itemGas) AS nombre,
+        CAST(COALESCE((
+          SELECT p.mon_proitemgas FROM dbo.PROITEMGAS p
+          WHERE p.fol_pro = :folio AND p.corr_itemGas = t1.corr_itemGas
+        ), 0) AS VARCHAR(18)) AS mon_proitemgas,
+        CAST(COALESCE((
+          SELECT SUM(r.mon_detren) FROM dbo.DETRENDICION r
+          WHERE r.fol_pro = :folio AND r.corr_itemGas = t1.corr_itemGas
+        ), 0) AS VARCHAR(18)) AS compaGas,
+        NULL AS obs_proitemgas
+      FROM dbo.vista_ProItemGas t1
+      WHERE t1.corr_mar = (
+        SELECT p.corr_mar FROM dbo.PROYECTOS p WHERE p.fol_pro = :folio
+      )
+      ORDER BY t1.corr_itemGas`, {
       type: QueryTypes.SELECT, replacements: { folio }, transaction,
     });
   },
@@ -277,8 +296,20 @@ export const proyectosRepository = {
     });
   },
 
-  async reemplazarGastos(folio: number, gastos: GastoProyectoInput[], transaction: Transaction) {
+  async reemplazarGastos(
+    folio: number,
+    gastos: GastoProyectoInput[],
+    contexto: { anio: number; mes: number; region: number; usuario: string },
+    transaction: Transaction,
+  ) {
+    // Esta operación siempre participa de la misma transacción que la cabecera:
+    // si falla un detalle, tampoco queda guardado el proyecto (o su modificación).
     await sequelize.query('DELETE FROM dbo.proitemgas_proempleo WHERE fol_pro = :folio', {
+      type: QueryTypes.DELETE, replacements: { folio }, transaction,
+    });
+    await sequelize.query(`
+      DELETE FROM dbo.detrendicion_proempleo
+      WHERE fol_pro = :folio AND glo_detren = 'FICHA_PROYECTO'`, {
       type: QueryTypes.DELETE, replacements: { folio }, transaction,
     });
     for (const gasto of gastos) {
@@ -287,6 +318,24 @@ export const proyectosRepository = {
         VALUES (:detalle, :folio, :monto, NULL)`, {
         type: QueryTypes.INSERT,
         replacements: { detalle: gasto.corr_itemGas, folio, monto: gasto.mon_proitemgas },
+        transaction,
+      });
+      await sequelize.query(`
+        INSERT INTO dbo.detrendicion_proempleo
+          (mes_detren, ano_detren, fol_dec, fol_pro, mon_detren, che_detren,
+           fac_detren, usu_cre, fec_cre, est_detren, corr_itemgas, egr_detren,
+           glo_detren, cod_region)
+        VALUES
+          (:mes, :anio, '00000000', :folio, :montoGasto, 'FICHA_PROYECTO',
+           0, :usuario, GETDATE(), 'ACTIVO', :detalle, 'FICHA',
+           'FICHA_PROYECTO', :region)`, {
+        type: QueryTypes.INSERT,
+        replacements: {
+          folio,
+          detalle: gasto.corr_itemGas,
+          montoGasto: gasto.compaGas,
+          ...contexto,
+        },
         transaction,
       });
     }

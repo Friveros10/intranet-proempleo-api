@@ -44,6 +44,7 @@ const gastoSchema = z.object({
   corr_itemGas: z.number().int()
     .refine((valor) => DetalleDeGastos.some((detalle) => detalle.id === valor), 'El detalle de gasto no es válido'),
   mon_proitemgas: monto,
+  compaGas: monto,
 }).strict();
 
 export const guardarProyectoSchema = z.object({
