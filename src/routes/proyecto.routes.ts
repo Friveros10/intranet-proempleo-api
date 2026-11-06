@@ -11,6 +11,10 @@ import {
   guardarProyectoSchema,
   listarProyectosSchema,
   obtenerProyectoSchema,
+  listarBeneficiariosProyectoSchema,
+  agregarBeneficiarioProyectoSchema,
+  eliminarBeneficiarioProyectoSchema,
+  buscarBeneficiarioProyectoSchema,
 } from '../validations/proyectos.validation';
 import {
   ciudadesSchema,
@@ -46,6 +50,11 @@ router.get('/proximo-folio', admin, asyncHandler(controller.proximoFolio));
 router.post('/', admin, validate(guardarProyectoSchema), asyncHandler(controller.crear));
 router.put('/proempleo/:folio', admin, validate(obtenerProyectoSchema), validate(guardarProyectoSchema), asyncHandler(controller.actualizar));
 router.delete('/proempleo/:folio', admin, validate(eliminarProyectoSchema), asyncHandler(controller.eliminar));
+router.get('/:folio/resumen', admin, validate(obtenerProyectoSchema), asyncHandler(controller.resumen));
+router.get('/:folio/beneficiarios', admin, validate(listarBeneficiariosProyectoSchema), asyncHandler(controller.beneficiarios));
+router.get('/:folio/beneficiarios/buscar', admin, validate(buscarBeneficiarioProyectoSchema), asyncHandler(controller.buscarBeneficiario));
+router.post('/:folio/beneficiarios', admin, validate(agregarBeneficiarioProyectoSchema), asyncHandler(controller.agregarBeneficiario));
+router.delete('/:folio/beneficiarios/:rut', admin, validate(eliminarBeneficiarioProyectoSchema), asyncHandler(controller.eliminarBeneficiario));
 router.get('/:folio/gastos', admin, validate(obtenerProyectoSchema), asyncHandler(controller.gastos));
 router.get('/:folio', admin, validate(obtenerProyectoSchema), asyncHandler(controller.obtener));
 

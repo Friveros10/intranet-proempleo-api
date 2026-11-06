@@ -159,6 +159,65 @@ export const proyectosService = {
     return proyecto;
   },
 
+  async resumen(folio: number, origen: OrigenMarco = 'legacy') {
+    const proyecto = await this.obtener(folio, origen);
+    const [periodos, decretos] = await Promise.all([
+      repository.periodosBeneficiarios(folio),
+      repository.decretos(folio),
+    ]);
+    return { proyecto, periodos, decretos };
+  },
+
+  async beneficiarios(folio: number, query: { origen: OrigenMarco; anio?: number; mes?: number; page: number }) {
+    await this.obtener(folio, query.origen);
+    const periodos = await repository.periodosBeneficiarios(folio);
+    const periodo = query.anio !== undefined && query.mes !== undefined
+      ? { anio: query.anio, mes: query.mes }
+      : periodos[0] ?? null;
+    if (!periodo) return { data: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 }, periodo: null };
+    return { ...await repository.beneficiarios(folio, periodo.anio, periodo.mes, query.page), periodo };
+  },
+
+  async buscarBeneficiario(folio: number, data: { rut: string; anio: number; mes: number }) {
+    const rut = rutValidado(data.rut);
+    const proyecto = await repository.obtener(folio, 'proempleo');
+    if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Proyecto ProEmpleo no encontrado', 404);
+    const beneficiario = await repository.buscarBeneficiario(rut.cuerpo);
+    if (!beneficiario) throw new AppError('El beneficiario no existe', 404);
+    const asignado = await repository.beneficiarioAsignado(rut.cuerpo, data.anio, data.mes);
+    return { ...beneficiario, disponible: !asignado };
+  },
+
+  async agregarBeneficiario(folio: number, data: { rut: string; anio: number; mes: number; dir_benpro: string; horario_benpro: string }, usuario: string) {
+    const rut = rutValidado(data.rut);
+    return sequelize.transaction(async (transaction) => {
+      const proyecto = await repository.obtener(folio, 'proempleo', transaction);
+      if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Solo se pueden modificar proyectos ProEmpleo activos', 404);
+      if (!await repository.existeBeneficiario(rut.cuerpo, transaction)) throw new AppError('El beneficiario no existe', 404);
+      const inicio = proyecto.fecini_pro ? new Date(proyecto.fecini_pro) : null;
+      const termino = proyecto.fecter_pro ? new Date(proyecto.fecter_pro) : null;
+      const periodo = new Date(Date.UTC(data.anio, data.mes - 1, 1));
+      const inicioMes = inicio ? new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), 1)) : null;
+      const terminoMes = termino ? new Date(Date.UTC(termino.getUTCFullYear(), termino.getUTCMonth(), 1)) : null;
+      if (!inicioMes || !terminoMes || periodo < inicioMes || periodo > terminoMes) {
+        throw new AppError('El período no está dentro del plazo del proyecto', 400);
+      }
+      if (await repository.beneficiarioAsignado(rut.cuerpo, data.anio, data.mes, transaction)) {
+        throw new AppError('El beneficiario ya está asignado a un proyecto en este período', 409);
+      }
+      await repository.agregarBeneficiario(folio, rut.cuerpo, data, usuario, transaction);
+      return { fol_pro: folio, rut_ben: rut.cuerpo, ...data };
+    });
+  },
+
+  async eliminarBeneficiario(folio: number, rut: number, periodo: { anio: number; mes: number }, usuario: string) {
+    const proyecto = await repository.obtener(folio, 'proempleo');
+    if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Solo se pueden modificar proyectos ProEmpleo activos', 404);
+    const eliminado = await repository.eliminarBeneficiario(folio, rut, periodo.anio, periodo.mes, usuario);
+    if (!eliminado) throw new AppError('La asignación ProEmpleo no fue encontrada', 404);
+    return { fol_pro: folio, rut_ben: rut, ...periodo };
+  },
+
   async crear(data: GuardarProyectoInput, usuario: string) {
     const nombre = nombreBanco(data.banco_pro);
     const gastos = completarDistribucionGastos(data.gastos);

@@ -36,6 +36,44 @@ export const eliminarProyectoSchema = z.object({
   params: z.object({ folio: id }),
 });
 
+export const listarBeneficiariosProyectoSchema = z.object({
+  params: z.object({ folio: id }),
+  query: z.object({
+    origen: z.enum(['legacy', 'proempleo']).default('legacy'),
+    anio: z.coerce.number().int().min(1900).max(3000).optional(),
+    mes: z.coerce.number().int().min(1).max(12).optional(),
+    page: z.coerce.number().int().positive().default(1),
+  }).default({}),
+});
+
+export const agregarBeneficiarioProyectoSchema = z.object({
+  params: z.object({ folio: id }),
+  body: z.object({
+    rut: z.string().trim().min(3).max(20),
+    anio: z.number().int().min(1900).max(3000),
+    mes: z.number().int().min(1).max(12),
+    dir_benpro: z.string().trim().min(1, 'La dirección de trabajo es obligatoria').max(250),
+    horario_benpro: z.string().trim().min(1, 'El horario es obligatorio').max(200),
+  }).strict(),
+});
+
+export const buscarBeneficiarioProyectoSchema = z.object({
+  params: z.object({ folio: id }),
+  query: z.object({
+    rut: z.string().trim().min(3).max(20),
+    anio: z.coerce.number().int().min(1900).max(3000),
+    mes: z.coerce.number().int().min(1).max(12),
+  }),
+});
+
+export const eliminarBeneficiarioProyectoSchema = z.object({
+  params: z.object({ folio: id, rut: id }),
+  query: z.object({
+    anio: z.coerce.number().int().min(1900).max(3000),
+    mes: z.coerce.number().int().min(1).max(12),
+  }),
+});
+
 export const catalogoPorComunaSchema = z.object({
   query: z.object({ comuna: id.optional() }),
 });

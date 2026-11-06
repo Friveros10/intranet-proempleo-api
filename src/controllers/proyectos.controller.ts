@@ -6,6 +6,10 @@ import {
   guardarProyectoSchema,
   listarProyectosSchema,
   obtenerProyectoSchema,
+  listarBeneficiariosProyectoSchema,
+  agregarBeneficiarioProyectoSchema,
+  eliminarBeneficiarioProyectoSchema,
+  buscarBeneficiarioProyectoSchema,
 } from '../validations/proyectos.validation';
 import {
   ciudadesSchema,
@@ -70,6 +74,26 @@ export const proyectosController = {
   async gastos(req: Request, res: Response) {
     const { params, query } = obtenerProyectoSchema.parse({ params: req.params, query: req.query });
     res.json(await service.gastos(params.folio, query.origen));
+  },
+  async resumen(req: Request, res: Response) {
+    const { params, query } = obtenerProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.resumen(params.folio, query.origen));
+  },
+  async beneficiarios(req: Request, res: Response) {
+    const { params, query } = listarBeneficiariosProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.beneficiarios(params.folio, query));
+  },
+  async agregarBeneficiario(req: Request, res: Response) {
+    const { params, body } = agregarBeneficiarioProyectoSchema.parse({ params: req.params, body: req.body });
+    res.status(201).json(await service.agregarBeneficiario(params.folio, body, usuario(req)));
+  },
+  async buscarBeneficiario(req: Request, res: Response) {
+    const { params, query } = buscarBeneficiarioProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.buscarBeneficiario(params.folio, query));
+  },
+  async eliminarBeneficiario(req: Request, res: Response) {
+    const { params, query } = eliminarBeneficiarioProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.eliminarBeneficiario(params.folio, params.rut, query, usuario(req)));
   },
   async crear(req: Request, res: Response) {
     const { body } = guardarProyectoSchema.parse({ body: req.body });

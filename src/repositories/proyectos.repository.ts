@@ -8,6 +8,7 @@ import type {
 } from '../validations/proyectos.validation';
 
 const LIMIT = 20;
+const BENEFICIARIOS_LIMIT = 10;
 
 const columnas = `p.fol_pro, RTRIM(p.nom_pro) AS nom_pro, p.rutint_pro, p.ruteje_pro, p.reg_pro, p.ciu_pro, p.com_pro,
   p.obj_pro, p.imp_pro, p.obs_pro, p.mes_pro, p.emp_pro, p.fecini_pro, p.fecter_pro, p.rutres_pro,
@@ -99,6 +100,7 @@ export type ProyectoDetalle = ProyectoListado & {
 export type IntermediarioCatalogo = { rut_int: number; dig_int: string; nom_int: string; com_int: number | null };
 export type EjecutorCatalogo = { rut_eje: number; dig_eje: string; nom_eje: string; com_eje: number | null };
 export type ResponsableCatalogo = Omit<ResponsableProyecto, 'origen'> & { com_res: number | null; origen: OrigenMarco };
+export type PeriodoBeneficiarios = { anio: number; mes: number; total: number };
 
 type Fila = ProyectoListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 
@@ -225,6 +227,141 @@ export const proyectosRepository = {
       ORDER BY t1.corr_itemGas`, {
       type: QueryTypes.SELECT, replacements: { folio }, transaction,
     });
+  },
+
+  periodosBeneficiarios(folio: number): Promise<PeriodoBeneficiarios[]> {
+    return sequelize.query<PeriodoBeneficiarios>(`
+      WITH asignaciones AS (
+        SELECT ano_BenPro AS anio, mes_benpro AS mes, fol_pro, rut_ben, est_benpro FROM dbo.BENPRO
+        UNION ALL
+        SELECT ano_BenPro, mes_benpro, fol_pro, rut_ben, est_benpro FROM dbo.benpro_proempleo
+      )
+      SELECT anio, mes, COUNT(DISTINCT rut_ben) AS total
+      FROM asignaciones
+      WHERE fol_pro = :folio AND (est_benpro IS NULL OR RTRIM(est_benpro) <> 'ELIMINADO')
+      GROUP BY anio, mes ORDER BY anio DESC, mes DESC`, {
+      type: QueryTypes.SELECT, replacements: { folio },
+    });
+  },
+
+  async beneficiarios(folio: number, anio: number, mes: number, page: number) {
+    type FilaBeneficiario = {
+      rut_ben: number | null; dig_ben: string | null; nom_ben: string | null; pat_ben: string | null;
+      mat_ben: string | null; nombreComuna: string | null; est_benpro: string | null;
+      dir_benpro: string | null; horario_benpro: string | null;
+      asignacionOrigen: OrigenMarco | null; fila: number | null; total: number; totalPages: number; pagina: number;
+    };
+    const rows = await sequelize.query<FilaBeneficiario>(`
+      WITH asignacionesBase AS (
+        SELECT fol_pro, ano_BenPro AS anio, mes_benpro AS mes, rut_ben, est_benpro, dir_benpro,
+          CAST(NULL AS VARCHAR(200)) AS horario_benpro, 'legacy' AS asignacionOrigen FROM dbo.BENPRO
+        UNION ALL
+        SELECT fol_pro, ano_BenPro, mes_benpro, rut_ben, est_benpro, dir_benpro, horario_benpro, 'proempleo' FROM dbo.benpro_proempleo
+      ), asignaciones AS (
+        SELECT *, ROW_NUMBER() OVER (
+          PARTITION BY fol_pro, anio, mes, rut_ben
+          ORDER BY CASE asignacionOrigen WHEN 'proempleo' THEN 0 ELSE 1 END
+        ) AS prioridadAsignacion FROM asignacionesBase
+      ), beneficiarios AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY rut_ben ORDER BY CASE origen WHEN 'proempleo' THEN 0 ELSE 1 END) prioridad
+        FROM dbo.beneficiarios_consulta WHERE est_ben IS NULL OR RTRIM(est_ben) <> 'ELIMINADO'
+      ), filtrados AS (
+        SELECT a.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, c.nom_com AS nombreComuna,
+          a.dir_benpro, a.horario_benpro, a.est_benpro, a.asignacionOrigen
+        FROM asignaciones a LEFT JOIN beneficiarios b ON b.rut_ben = a.rut_ben AND b.prioridad = 1
+        LEFT JOIN dbo.COMUNAS c ON c.cod_com = b.com_ben
+        WHERE a.fol_pro = :folio AND a.anio = :anio AND a.mes = :mes
+          AND a.prioridadAsignacion = 1
+          AND (a.est_benpro IS NULL OR RTRIM(a.est_benpro) <> 'ELIMINADO')
+      ), numerados AS (
+        SELECT *, ROW_NUMBER() OVER (ORDER BY pat_ben, mat_ben, nom_ben, rut_ben) fila FROM filtrados
+      ), totales AS (SELECT COUNT(*) total FROM filtrados),
+      meta AS (SELECT total, CASE WHEN total = 0 THEN 1 ELSE (total - 1) / :limite + 1 END totalPages FROM totales),
+      pagina AS (SELECT *, CASE WHEN :pagina > totalPages THEN totalPages ELSE :pagina END pagina FROM meta)
+      SELECT n.*, p.total, p.totalPages, p.pagina FROM pagina p LEFT JOIN numerados n
+        ON n.fila BETWEEN ((p.pagina - 1) * :limite + 1) AND (p.pagina * :limite)
+      ORDER BY n.fila`, {
+      type: QueryTypes.SELECT, replacements: { folio, anio, mes, pagina: page, limite: BENEFICIARIOS_LIMIT },
+    });
+    const meta = rows[0];
+    const data = rows.filter((row) => row.fila !== null).map(({ fila, total, totalPages, pagina, ...row }) => row);
+    return { data, pagination: { page: meta.pagina, limit: BENEFICIARIOS_LIMIT, total: meta.total, totalPages: meta.totalPages } };
+  },
+
+  decretos(folio: number) {
+    return sequelize.query<{ fol_dec: string; folprov_dec: string; cor_decpro: number; mon_decpro: string; origen: OrigenMarco }>(`
+      SELECT RTRIM(fol_dec) fol_dec, RTRIM(folprov_dec) folprov_dec, cor_decpro,
+        CAST(mon_decpro AS VARCHAR(18)) mon_decpro, origen
+      FROM (
+        SELECT fol_dec, folprov_dec, cor_decpro, mon_decpro, fol_pro, est_decpro, 'legacy' AS origen FROM dbo.DECPRO
+        UNION ALL
+        SELECT fol_dec, folprov_dec, cor_decpro, mon_decpro, fol_pro, est_decpro, 'proempleo' FROM dbo.decpro_proempleo
+      ) d WHERE fol_pro = :folio AND (est_decpro IS NULL OR RTRIM(est_decpro) <> 'ELIMINADO')
+      ORDER BY fol_dec DESC, cor_decpro DESC`, { type: QueryTypes.SELECT, replacements: { folio } });
+  },
+
+  async existeBeneficiario(rut: number, transaction?: Transaction): Promise<boolean> {
+    const rows = await sequelize.query<{ total: number }>(`
+      SELECT COUNT(*) total FROM dbo.beneficiarios_consulta
+      WHERE rut_ben = :rut AND (est_ben IS NULL OR RTRIM(est_ben) <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT, replacements: { rut }, transaction,
+    });
+    return (rows[0]?.total ?? 0) > 0;
+  },
+
+  async buscarBeneficiario(rut: number) {
+    const rows = await sequelize.query<{
+      rut_ben: number; dig_ben: string | null; nom_ben: string | null; pat_ben: string | null;
+      mat_ben: string | null; dir_ben: string | null; nombreComuna: string | null;
+    }>(`
+      WITH beneficiarios AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY rut_ben ORDER BY CASE origen WHEN 'proempleo' THEN 0 ELSE 1 END) prioridad
+        FROM dbo.beneficiarios_consulta
+        WHERE rut_ben=:rut AND (est_ben IS NULL OR RTRIM(est_ben) <> 'ELIMINADO')
+      )
+      SELECT b.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, b.dir_ben,
+        c.nom_com AS nombreComuna
+      FROM beneficiarios b LEFT JOIN dbo.COMUNAS c ON c.cod_com=b.com_ben WHERE b.prioridad=1`, {
+      type: QueryTypes.SELECT, replacements: { rut },
+    });
+    return rows[0] ?? null;
+  },
+
+  async beneficiarioAsignado(rut: number, anio: number, mes: number, transaction?: Transaction): Promise<boolean> {
+    const rows = await sequelize.query<{ total: number }>(`
+      SELECT COUNT(*) total FROM (
+        SELECT rut_ben, est_benpro FROM dbo.BENPRO WHERE ano_BenPro=:anio AND mes_benpro=:mes
+        UNION ALL
+        SELECT rut_ben, est_benpro FROM dbo.benpro_proempleo WHERE ano_BenPro=:anio AND mes_benpro=:mes
+      ) b WHERE rut_ben=:rut AND (est_benpro IS NULL OR RTRIM(est_benpro) <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT, replacements: { rut, anio, mes }, transaction,
+    });
+    return (rows[0]?.total ?? 0) > 0;
+  },
+
+  async agregarBeneficiario(folio: number, rut: number, data: { anio: number; mes: number; dir_benpro: string; horario_benpro: string }, usuario: string, transaction: Transaction) {
+    await sequelize.query(`
+      INSERT INTO dbo.benpro_proempleo
+        (ano_BenPro, mes_benpro, fol_pro, rut_ben, com_ben, cor_benpro, est_benpro, usu_cre, fec_cre, dir_benpro, horario_benpro)
+      SELECT :anio, :mes, :folio, :rut, b.com_ben,
+        COALESCE((SELECT MAX(cor_benpro) FROM (
+          SELECT cor_benpro FROM dbo.BENPRO WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
+          UNION ALL SELECT cor_benpro FROM dbo.benpro_proempleo WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
+        ) correlativos), 0) + 1, 'ACTIVO', :usuario, GETDATE(), :direccion, :horario
+      FROM dbo.beneficiarios_consulta b WHERE b.rut_ben=:rut
+      ORDER BY CASE b.origen WHEN 'proempleo' THEN 0 ELSE 1 END OFFSET 0 ROWS FETCH NEXT 1 ROW ONLY`, {
+      type: QueryTypes.INSERT, replacements: { folio, rut, anio: data.anio, mes: data.mes, direccion: data.dir_benpro, horario: data.horario_benpro, usuario }, transaction,
+    });
+  },
+
+  async eliminarBeneficiario(folio: number, rut: number, anio: number, mes: number, usuario: string): Promise<boolean> {
+    const rows = await sequelize.query<{ id: number }>(`
+      UPDATE dbo.benpro_proempleo SET est_benpro='ELIMINADO', usu_eli=:usuario, fec_eli=GETDATE()
+      OUTPUT INSERTED.id WHERE fol_pro=:folio AND rut_ben=:rut AND ano_BenPro=:anio AND mes_benpro=:mes
+        AND (est_benpro IS NULL OR RTRIM(est_benpro) <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT, replacements: { folio, rut, anio, mes, usuario },
+    });
+    return rows.length > 0;
   },
 
   async proximoFolio(): Promise<number> {
