@@ -4,6 +4,14 @@ import { DetalleDeGastos } from '../constants/DetalleDeGastos';
 
 const id = z.coerce.number().int().positive().max(2147483647);
 const monto = z.string().trim().regex(/^\d{1,18}$/, 'El monto debe ser un entero no negativo de hasta 18 dígitos');
+export const asignarDecretoProyectoSchema = z.object({
+  params: z.object({ folio: id }),
+  body: z.object({
+    decretos: z.array(z.string().trim().min(1).max(8).transform((v) => v.toUpperCase())
+      .refine((v) => !v.includes('P'), 'No se permiten folios con P')).min(1).max(100)
+      .refine((valores) => new Set(valores).size === valores.length, 'Hay decretos repetidos'),
+  }).strict(),
+});
 const fecha = z.string().trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe tener formato YYYY-MM-DD')
   .refine((valor) => {
@@ -75,7 +83,7 @@ export const eliminarBeneficiarioProyectoSchema = z.object({
 });
 
 export const catalogoPorComunaSchema = z.object({
-  query: z.object({ comuna: id.optional() }),
+  query: z.object({ comuna: id.optional(), region: id.optional() }),
 });
 
 const gastoSchema = z.object({

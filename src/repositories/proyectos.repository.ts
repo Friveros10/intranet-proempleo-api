@@ -18,16 +18,16 @@ const columnas = `p.fol_pro, RTRIM(p.nom_pro) AS nom_pro, p.rutint_pro, p.ruteje
 const union = `SELECT ${columnas}, NULL AS banco_pro, 'legacy' AS origen FROM dbo.PROYECTOS p
   UNION ALL SELECT ${columnas}, p.banco_pro, 'proempleo' AS origen FROM dbo.proyectos_proempleo p`;
 
-const unionIntermediarios = `SELECT rut_int, RTRIM(dig_int) AS dig_int, nom_int, com_int, Est_int, 'legacy' AS origen FROM dbo.INTERMEDIARIOS
-  UNION ALL SELECT rut_int, RTRIM(dig_int) AS dig_int, nom_int, com_int, Est_int, 'proempleo' AS origen FROM dbo.intermediarios_proempleo`;
+const unionIntermediarios = `SELECT rut_int, RTRIM(dig_int) AS dig_int, nom_int, com_int, reg_int, Est_int, 'legacy' AS origen FROM dbo.INTERMEDIARIOS
+  UNION ALL SELECT rut_int, RTRIM(dig_int) AS dig_int, nom_int, com_int, reg_int, Est_int, 'proempleo' AS origen FROM dbo.intermediarios_proempleo`;
 
-const unionEjecutores = `SELECT rut_eje, RTRIM(dig_eje) AS dig_eje, nom_eje, com_eje, Est_eje, 'legacy' AS origen FROM dbo.EJECUTORES
-  UNION ALL SELECT rut_eje, RTRIM(dig_eje) AS dig_eje, nom_eje, com_eje, Est_eje, 'proempleo' AS origen FROM dbo.ejecutores_proempleo`;
+const unionEjecutores = `SELECT rut_eje, RTRIM(dig_eje) AS dig_eje, nom_eje, com_eje, reg_eje, Est_eje, 'legacy' AS origen FROM dbo.EJECUTORES
+  UNION ALL SELECT rut_eje, RTRIM(dig_eje) AS dig_eje, nom_eje, com_eje, reg_eje, Est_eje, 'proempleo' AS origen FROM dbo.ejecutores_proempleo`;
 
 const unionResponsables = `SELECT rut_res, RTRIM(dig_res) AS dig_res, nom_res, pat_res, mat_res, car_res, tel_res,
-    ema_res, com_res, Est_res, 'legacy' AS origen FROM dbo.RESPONSABLES
+    ema_res, com_res, reg_res, Est_res, 'legacy' AS origen FROM dbo.RESPONSABLES
   UNION ALL SELECT rut_res, RTRIM(dig_res) AS dig_res, nom_res, pat_res, mat_res, car_res, tel_res,
-    ema_res, com_res, Est_res, 'proempleo' AS origen FROM dbo.responsables_proempleo`;
+    ema_res, com_res, reg_res, Est_res, 'proempleo' AS origen FROM dbo.responsables_proempleo`;
 
 const marcos = `SELECT ano_mar, est_mar FROM dbo.MARCO
   UNION ALL SELECT ano_mar, est_mar FROM dbo.marco_proempleo`;
@@ -105,6 +105,88 @@ export type PeriodoBeneficiarios = { anio: number; mes: number; total: number };
 type Fila = ProyectoListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 
 export const proyectosRepository = {
+  async decretosDisponibles(region: number, anio: number) {
+    return sequelize.query<{ fol_dec: string; folprov_dec: string | null; disponible: string }>(`
+      WITH decretos AS (
+        SELECT fol_dec, folprov_dec, mon_dec, ano_dec, rutint_dec, est_dec FROM dbo.DECRETOS
+        UNION ALL SELECT fol_dec, folprov_dec, mon_dec, ano_dec, rutint_dec, est_dec FROM dbo.decretos_proempleo
+      ), intermediarios AS (
+        SELECT rut_int, reg_int FROM dbo.INTERMEDIARIOS
+        UNION ALL SELECT rut_int, reg_int FROM dbo.intermediarios_proempleo
+      )
+      SELECT DISTINCT RTRIM(d.fol_dec) fol_dec, RTRIM(d.folprov_dec) folprov_dec,
+        CAST(COALESCE(d.mon_dec, 0) - COALESCE((SELECT SUM(a.mon_decpro) FROM (
+          SELECT fol_dec, mon_decpro, est_decpro FROM dbo.DECPRO
+          UNION ALL SELECT fol_dec, mon_decpro, est_decpro FROM dbo.decpro_proempleo
+        ) a WHERE a.fol_dec = d.fol_dec AND (a.est_decpro IS NULL OR a.est_decpro <> 'ELIMINADO')), 0) AS VARCHAR(18)) disponible
+      FROM decretos d WHERE d.ano_dec = :anio AND UPPER(d.fol_dec) NOT LIKE '%P%' AND (d.est_dec IS NULL OR d.est_dec <> 'ELIMINADO')
+        AND EXISTS (SELECT 1 FROM intermediarios i WHERE i.rut_int = d.rutint_dec AND i.reg_int = :region)
+      ORDER BY fol_dec`, { type: QueryTypes.SELECT, replacements: { region, anio } });
+  },
+
+  async asignarDecreto(folio: number, decreto: string, monto: string, usuario: string, transaction: Transaction, folprov = '') {
+    await sequelize.query(`
+      INSERT INTO dbo.decpro_proempleo (fol_dec, fol_pro, folprov_dec, cor_decpro, mon_decpro, usu_cre, fec_cre, est_decpro)
+      SELECT :decreto, :folio, :folprov,
+        COALESCE((SELECT MAX(cor_decpro) FROM dbo.decpro_proempleo WITH (UPDLOCK, HOLDLOCK)), 0) + 1,
+        :monto, :usuario, GETDATE(), 'ACTIVO'`, {
+      replacements: { folio, decreto, monto, usuario, folprov }, transaction,
+    });
+  },
+
+  async decretoParaAsignar(decreto: string, transaction: Transaction) {
+    const rows = await sequelize.query<{ ano_dec: number; rutint_dec: number; folprov_dec: string | null; disponible: string }>(`
+      WITH decretos AS (
+        SELECT fol_dec, folprov_dec, mon_dec, ano_dec, rutint_dec, est_dec FROM dbo.DECRETOS WITH (UPDLOCK, HOLDLOCK)
+        UNION ALL SELECT fol_dec, folprov_dec, mon_dec, ano_dec, rutint_dec, est_dec FROM dbo.decretos_proempleo WITH (UPDLOCK, HOLDLOCK)
+      )
+      SELECT d.ano_dec, d.rutint_dec, RTRIM(d.folprov_dec) folprov_dec,
+        CAST(COALESCE(d.mon_dec, 0) - COALESCE((SELECT SUM(a.mon_decpro) FROM (
+          SELECT fol_dec, mon_decpro, est_decpro FROM dbo.DECPRO
+          UNION ALL SELECT fol_dec, mon_decpro, est_decpro FROM dbo.decpro_proempleo
+        ) a WHERE a.fol_dec = d.fol_dec AND (a.est_decpro IS NULL OR a.est_decpro <> 'ELIMINADO')), 0) AS VARCHAR(18)) disponible
+      FROM decretos d WHERE d.fol_dec = :decreto AND (d.est_dec IS NULL OR d.est_dec <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT, replacements: { decreto }, transaction,
+    });
+    return rows[0];
+  },
+
+  async intermediarioEnRegion(rut: number, region: number, transaction?: Transaction) {
+    const rows = await sequelize.query<{ total: number }>(`
+      SELECT COUNT(*) total FROM (
+        SELECT rut_int, reg_int FROM dbo.INTERMEDIARIOS
+        UNION ALL SELECT rut_int, reg_int FROM dbo.intermediarios_proempleo
+      ) i WHERE i.rut_int = :rut AND i.reg_int = :region`, {
+      type: QueryTypes.SELECT, replacements: { rut, region }, transaction,
+    });
+    return (rows[0]?.total ?? 0) > 0;
+  },
+
+  async opcionesFiltros(anio: number, region?: number) {
+    const base = `WITH proyectos AS (${union}), disponibles AS (
+      SELECT * FROM proyectos WHERE ano_pro = :anio ${region === undefined ? "" : "AND reg_pro = :region"}
+        AND (est_pro IS NULL OR est_pro <> 'ELIMINADO')
+    )`;
+    const options = { type: QueryTypes.SELECT as const, replacements: { anio, region } };
+    const [regiones, intermediarios, ejecutores] = await Promise.all([
+      sequelize.query<{ cod_region: number; nom_region: string }>(`${base}
+        SELECT r.cod_region, RTRIM(r.Nom_region) AS nom_region FROM dbo.REGIONES r
+        WHERE EXISTS (SELECT 1 FROM disponibles p WHERE p.reg_pro = r.cod_region)
+        ORDER BY r.cod_region`, options),
+      sequelize.query<IntermediarioCatalogo>(`${base}
+        SELECT i.rut_int, MAX(i.dig_int) AS dig_int, MAX(RTRIM(i.nom_int)) AS nom_int, MAX(i.com_int) AS com_int
+        FROM (${unionIntermediarios}) i
+        WHERE EXISTS (SELECT 1 FROM disponibles p WHERE p.rutint_pro = i.rut_int)
+        GROUP BY i.rut_int ORDER BY nom_int`, options),
+      sequelize.query<EjecutorCatalogo>(`${base}
+        SELECT e.rut_eje, MAX(e.dig_eje) AS dig_eje, MAX(RTRIM(e.nom_eje)) AS nom_eje, MAX(e.com_eje) AS com_eje
+        FROM (${unionEjecutores}) e
+        WHERE EXISTS (SELECT 1 FROM disponibles p WHERE p.ruteje_pro = e.rut_eje)
+        GROUP BY e.rut_eje ORDER BY nom_eje`, options),
+    ]);
+    return { regiones, intermediarios, ejecutores };
+  },
+
   async listar({ folio, banco, anio, intermediario, ejecutor, region, comuna, page }: ListarProyectosQuery) {
     const filtros = [
       "(est_pro IS NULL OR est_pro <> 'ELIMINADO')",
@@ -288,7 +370,7 @@ export const proyectosRepository = {
     return { data, pagination: { page: meta.pagina, limit: BENEFICIARIOS_LIMIT, total: meta.total, totalPages: meta.totalPages } };
   },
 
-  decretos(folio: number) {
+  decretos(folio: number, transaction?: Transaction) {
     return sequelize.query<{ fol_dec: string; folprov_dec: string; cor_decpro: number; mon_decpro: string; origen: OrigenMarco }>(`
       SELECT RTRIM(fol_dec) fol_dec, RTRIM(folprov_dec) folprov_dec, cor_decpro,
         CAST(mon_decpro AS VARCHAR(18)) mon_decpro, origen
@@ -297,7 +379,7 @@ export const proyectosRepository = {
         UNION ALL
         SELECT fol_dec, folprov_dec, cor_decpro, mon_decpro, fol_pro, est_decpro, 'proempleo' FROM dbo.decpro_proempleo
       ) d WHERE fol_pro = :folio AND (est_decpro IS NULL OR RTRIM(est_decpro) <> 'ELIMINADO')
-      ORDER BY fol_dec DESC, cor_decpro DESC`, { type: QueryTypes.SELECT, replacements: { folio } });
+      ORDER BY fol_dec DESC, cor_decpro DESC`, { type: QueryTypes.SELECT, replacements: { folio }, transaction });
   },
 
   async existeBeneficiario(rut: number, transaction?: Transaction): Promise<boolean> {
@@ -494,29 +576,32 @@ export const proyectosRepository = {
     return rows.map((row) => row.ano_mar);
   },
 
-  intermediarios(comuna?: number): Promise<IntermediarioCatalogo[]> {
+  intermediarios(comuna?: number, region?: number): Promise<IntermediarioCatalogo[]> {
     return sequelize.query<IntermediarioCatalogo>(`
       SELECT rut_int, dig_int, nom_int, com_int FROM (${unionIntermediarios}) i
       WHERE (i.Est_int IS NULL OR RTRIM(i.Est_int) <> 'ELIMINADO')
       ${comuna === undefined ? '' : 'AND i.com_int = :comuna'}
-      ORDER BY i.nom_int, i.rut_int`, { type: QueryTypes.SELECT, replacements: { comuna } });
+      ${region === undefined ? '' : 'AND i.reg_int = :region'}
+      ORDER BY i.nom_int, i.rut_int`, { type: QueryTypes.SELECT, replacements: { comuna, region } });
   },
 
-  ejecutores(comuna?: number): Promise<EjecutorCatalogo[]> {
+  ejecutores(comuna?: number, region?: number): Promise<EjecutorCatalogo[]> {
     return sequelize.query<EjecutorCatalogo>(`
       SELECT rut_eje, dig_eje, nom_eje, com_eje FROM (${unionEjecutores}) e
       WHERE (e.Est_eje IS NULL OR RTRIM(e.Est_eje) <> 'ELIMINADO')
       ${comuna === undefined ? '' : 'AND e.com_eje = :comuna'}
-      ORDER BY e.nom_eje, e.rut_eje`, { type: QueryTypes.SELECT, replacements: { comuna } });
+      ${region === undefined ? '' : 'AND e.reg_eje = :region'}
+      ORDER BY e.nom_eje, e.rut_eje`, { type: QueryTypes.SELECT, replacements: { comuna, region } });
   },
 
-  responsables(comuna?: number): Promise<ResponsableCatalogo[]> {
+  responsables(comuna?: number, region?: number): Promise<ResponsableCatalogo[]> {
     return sequelize.query<ResponsableCatalogo>(`
       SELECT rut_res, dig_res, nom_res, pat_res, mat_res, car_res, tel_res, ema_res, com_res, origen
       FROM (${unionResponsables}) r
       WHERE (r.Est_res IS NULL OR RTRIM(r.Est_res) <> 'ELIMINADO')
       ${comuna === undefined ? '' : 'AND r.com_res = :comuna'}
-      ORDER BY r.nom_res, r.rut_res`, { type: QueryTypes.SELECT, replacements: { comuna } });
+      ${region === undefined ? '' : 'AND r.reg_res = :region'}
+      ORDER BY r.nom_res, r.rut_res`, { type: QueryTypes.SELECT, replacements: { comuna, region } });
   },
 
   async existeIntermediario(rut: number, comuna?: number): Promise<boolean> {

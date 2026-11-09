@@ -17,6 +17,7 @@ import {
   guardarResponsableSchema,
 } from '../validations/intermediarios.validation';
 import { AppError } from '../utils/AppError';
+import { asignarDecretoProyectoSchema } from '../validations/proyectos.validation';
 
 function usuario(req: Request) {
   if (!req.user || !/^\d{1,50}$/.test(req.user.sub)) throw new AppError('Sesión inválida', 401);
@@ -24,9 +25,21 @@ function usuario(req: Request) {
 }
 
 export const proyectosController = {
+  async decretosDisponibles(req: Request, res: Response) {
+    const { params, query } = obtenerProyectoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.decretosDisponibles(params.folio, query.origen));
+  },
+  async asignarDecreto(req: Request, res: Response) {
+    const { params, body } = asignarDecretoProyectoSchema.parse({ params: req.params, body: req.body });
+    res.status(201).json(await service.asignarDecreto(params.folio, body, usuario(req)));
+  },
+  async opcionesFiltros(req: Request, res: Response) {
+    const { query } = listarProyectosSchema.parse({ query: req.query });
+    res.json(await service.opcionesFiltros(query.anio, res.locals.regionProyectos));
+  },
   async listar(req: Request, res: Response) {
     const { query } = listarProyectosSchema.parse({ query: req.query });
-    res.json(await service.listar(query));
+    res.json(await service.listar({ ...query, region: res.locals.regionProyectos ?? query.region }));
   },
   banco(_req: Request, res: Response) {
     res.json(service.banco());
@@ -38,7 +51,8 @@ export const proyectosController = {
     res.json(await service.anios());
   },
   async regiones(_req: Request, res: Response) {
-    res.json(await service.regiones());
+    const regiones = await service.regiones();
+    res.json(res.locals.regionProyectos ? regiones.filter((r) => Number(r.cod_region) === res.locals.regionProyectos) : regiones);
   },
   async ciudades(req: Request, res: Response) {
     const { query } = ciudadesSchema.parse({ query: req.query });
@@ -46,19 +60,19 @@ export const proyectosController = {
   },
   async comunas(req: Request, res: Response) {
     const { query } = comunasSchema.parse({ query: req.query });
-    res.json(await service.comunas(query));
+    res.json(await service.comunas({ ...query, region: res.locals.regionProyectos ?? query.region }));
   },
   async intermediarios(req: Request, res: Response) {
     const { query } = catalogoPorComunaSchema.parse({ query: req.query });
-    res.json(await service.intermediarios(query.comuna));
+    res.json(await service.intermediarios(query.comuna, res.locals.regionProyectos ?? query.region));
   },
   async ejecutores(req: Request, res: Response) {
     const { query } = catalogoPorComunaSchema.parse({ query: req.query });
-    res.json(await service.ejecutores(query.comuna));
+    res.json(await service.ejecutores(query.comuna, res.locals.regionProyectos ?? query.region));
   },
   async responsables(req: Request, res: Response) {
     const { query } = catalogoPorComunaSchema.parse({ query: req.query });
-    res.json(await service.responsables(query.comuna));
+    res.json(await service.responsables(query.comuna, res.locals.regionProyectos ?? query.region));
   },
   async crearResponsable(req: Request, res: Response) {
     const { body } = guardarResponsableSchema.parse({ body: req.body });

@@ -56,28 +56,69 @@ function rutValidado(rutFormateado: string) {
   return rut;
 }
 
-// Intermediario, ejecutor y responsable deben pertenecer a la comuna del
-// proyecto: los selectores del formulario se filtran por comuna y el backend
-// exige la misma pertenencia.
+// Intermediario, ejecutor y responsable deben pertenecer a la región del proyecto.
 async function validarReferencias(data: GuardarProyectoInput) {
   if (!await repository.comunaValida(data.reg_pro, data.ciu_pro, data.com_pro)) {
     throw new AppError('La comuna no pertenece a la provincia y región seleccionadas', 400);
   }
   const [intermediario, ejecutor, responsable, anios] = await Promise.all([
-    repository.existeIntermediario(data.rutint_pro, data.com_pro),
-    repository.existeEjecutor(data.ruteje_pro, data.com_pro),
-    repository.existeResponsable(data.rutres_pro, data.com_pro),
+    repository.intermediarios(undefined, data.reg_pro).then((rows) => rows.some((r) => Number(r.rut_int) === data.rutint_pro)),
+    repository.ejecutores(undefined, data.reg_pro).then((rows) => rows.some((r) => Number(r.rut_eje) === data.ruteje_pro)),
+    repository.responsables(undefined, data.reg_pro).then((rows) => rows.some((r) => Number(r.rut_res) === data.rutres_pro)),
     repository.aniosProgramas(),
   ]);
-  if (!intermediario) throw new AppError('El intermediario seleccionado no pertenece a la comuna del proyecto', 400);
-  if (!ejecutor) throw new AppError('El ejecutor seleccionado no pertenece a la comuna del proyecto', 400);
-  if (!responsable) throw new AppError('El responsable seleccionado no pertenece a la comuna del proyecto', 400);
+  if (!intermediario) throw new AppError('El intermediario seleccionado no pertenece a la región del proyecto', 400);
+  if (!ejecutor) throw new AppError('El ejecutor seleccionado no pertenece a la región del proyecto', 400);
+  if (!responsable) throw new AppError('El responsable seleccionado no pertenece a la región del proyecto', 400);
   if (!anios.includes(data.ano_pro)) {
     throw new AppError('El año no corresponde a los programas ingresados en el sistema', 400);
   }
 }
 
 export const proyectosService = {
+  async decretosDisponibles(folio: number, origen: OrigenMarco) {
+    const proyecto = await this.obtener(folio, origen);
+    const [disponibles, asociados] = await Promise.all([
+      repository.decretosDisponibles(proyecto.reg_pro, proyecto.ano_pro!), repository.decretos(folio),
+    ]);
+    return disponibles.filter((d) => !d.fol_dec.toUpperCase().includes("P") && !asociados.some((a) => a.fol_dec === d.fol_dec));
+  },
+  async asignarDecreto(folio: number, data: { decretos: string[] }, usuario: string) {
+    return sequelize.transaction(async (transaction) => {
+      const proyecto = await repository.obtener(folio, 'proempleo', transaction);
+      if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Proyecto no encontrado', 404);
+      const asociados = await repository.decretos(folio, transaction);
+      const pendientes: { folio: string; folprov: string }[] = [];
+      for (const folioDecreto of data.decretos) {
+        if (folioDecreto.toUpperCase().includes('P')) throw new AppError('No se permiten folios con P', 400);
+        if (pendientes.some((d) => d.folio === folioDecreto) || asociados.some((d) => d.fol_dec === folioDecreto)) {
+          throw new AppError('El decreto ya está asociado al proyecto o está repetido', 409);
+        }
+        const decreto = await repository.decretoParaAsignar(folioDecreto, transaction);
+        if (!decreto) throw new AppError('Decreto no encontrado', 404);
+        if (decreto.ano_dec !== proyecto.ano_pro || !await repository.intermediarioEnRegion(Number(decreto.rutint_dec), proyecto.reg_pro, transaction)) {
+          throw new AppError('El decreto debe corresponder al año y región del proyecto', 400);
+        }
+        pendientes.push({ folio: folioDecreto, folprov: decreto.folprov_dec ?? '' });
+      }
+      for (const decreto of pendientes) {
+        await repository.asignarDecreto(folio, decreto.folio, '0', usuario, transaction, decreto.folprov);
+      }
+      return { fol_pro: folio, decretos: data.decretos };
+    });
+  },
+  async opcionesFiltros(anio?: number, region?: number) {
+    if (anio !== undefined) {
+      const opciones = await repository.opcionesFiltros(anio, region);
+      if (region !== undefined) opciones.regiones = (await regionRepository.findAll()).filter((r) => r.cod_region === region);
+      return opciones;
+    }
+    const [regiones, intermediarios, ejecutores] = await Promise.all([
+      regionRepository.findAll().then((rows) => region === undefined ? rows : rows.filter((r) => r.cod_region === region)), repository.intermediarios(undefined, region), repository.ejecutores(undefined, region),
+    ]);
+    return { regiones, intermediarios, ejecutores };
+  },
+
   listar(query: ListarProyectosQuery) {
     return repository.listar(query);
   },
@@ -95,7 +136,7 @@ export const proyectosService = {
   },
 
   regiones() {
-    return regionRepository.findRegionesActivas();
+    return regionRepository.findAll();
   },
 
   ciudades(region: number) {
@@ -106,16 +147,16 @@ export const proyectosService = {
     return repository.comunas(filtros);
   },
 
-  intermediarios(comuna?: number) {
-    return repository.intermediarios(comuna);
+  intermediarios(comuna?: number, region?: number) {
+    return repository.intermediarios(comuna, region);
   },
 
-  ejecutores(comuna?: number) {
-    return repository.ejecutores(comuna);
+  ejecutores(comuna?: number, region?: number) {
+    return repository.ejecutores(comuna, region);
   },
 
-  responsables(comuna?: number) {
-    return repository.responsables(comuna);
+  responsables(comuna?: number, region?: number) {
+    return repository.responsables(comuna, region);
   },
 
   async crearResponsable(data: GuardarResponsableInput, usuario: string) {
