@@ -417,6 +417,23 @@ export const reemplazoBenProyectoService = {
       );
     }
 
+    const referencia = reemplazos[0];
+    const candidatosDelCupo = await ReemplazoBenProyectoModel.findAll({
+      where: {
+        idProyecto: referencia.idProyecto,
+        idBeneficiarioProyecto: referencia.idBeneficiarioProyecto,
+        ...(referencia.idBeneficiarioProyecto === null
+          ? { fechaSolicitudReemplazo: referencia.fechaSolicitudReemplazo }
+          : {}),
+      },
+    });
+    if (candidatosDelCupo.some((row) => ["enRevision", "rechazado", "pendiente"].includes(row.status))) {
+      throw new AppError("No se puede guardar el checklist mientras exista un candidato con solicitud en revisión, rechazada o pendiente", 409);
+    }
+    if (candidatosDelCupo.some((row) => !ids.includes(row.id))) {
+      throw new AppError("Debes evaluar todos los candidatos del reemplazo", 409);
+    }
+
     // Los valores iniciales se sugieren en el formulario; se guardan los criterios editados.
     const evaluaciones = data.candidatos.map(({ id, ...criterios }) => {
       const { criterio_2, criterio_3, criterio_4 } = criterios;

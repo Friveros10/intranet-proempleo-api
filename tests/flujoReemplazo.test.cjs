@@ -231,6 +231,18 @@ test('listado aplica region real, oculta checklist regional y conserva acceso al
   assert.equal(selector.mock.calls.length, 0);
 });
 
+test('checklist bloquea solicitudes pendientes, en revisión y rechazadas sin escribir', async () => {
+  contexto();
+  const obtener = mock.method(repo, 'obtener', async () => row());
+  const actualizar = mock.method(repo, 'actualizar', async () => [1]);
+  const candidato = { id: 7, criterio_1: 0, criterio_2: 0, criterio_3: 0, criterio_4: 0, criterio_5: null };
+  for (const status of ['pendiente', 'enRevision', 'rechazado']) {
+    obtener.mock.mockImplementation(async () => ({ ...row(), status }));
+    await assert.rejects(service.checklist({ candidatos: [candidato] }, 1, req), /No se puede guardar|ya está resuelta/);
+  }
+  assert.equal(actualizar.mock.calls.length, 0);
+});
+
 test('checklist individual exige documentos aprobados y aprueba la solicitud al guardar', async () => {
   contexto();
   const obtener = mock.method(repo, 'obtener', async () => row());

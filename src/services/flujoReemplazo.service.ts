@@ -256,6 +256,9 @@ export const flujoReemplazoService = {
     if (row.status === "aprobado" || row.status === "rechazado") {
       throw new AppError("La solicitud ya está resuelta", 409);
     }
+    if (["enRevision", "rechazado", "pendiente"].includes(row.status)) {
+      throw new AppError("No se puede guardar el checklist mientras la solicitud esté en revisión, rechazada o pendiente", 409);
+    }
     const documentos = await repository.documentos(row.id);
     if (documentos.length !== DOCUMENTOS_REEMPLAZO.length ||
         documentos.some((doc) => doc.get().status !== "aprobado")) {
