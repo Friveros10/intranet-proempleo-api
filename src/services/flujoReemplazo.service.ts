@@ -13,7 +13,6 @@ import type { DocumentoStatus } from "../models/DocReemplazoBenProyecto.model";
 import type { CrearReemplazoIndividualInput } from "../validations/flujoReemplazo.validation";
 import type { ActualizarChecklistReemplazoInput } from "../validations/reemplazoBenProyecto.validation";
 import { planEgresoHistoricoService } from "./planEgresoHistorico.service";
-import { puntajeEdadAutomatico, puntajeRshAutomatico } from "./reemplazoBenProyecto.service";
 import { CAMPOS_CHECKLIST_REEMPLAZO, puedeGestionarChecklist } from "../constants/checklist.constants";
 import { DOCUMENTOS_REEMPLAZO } from "../constants/documentosReemplazo";
 import { guardarDocumentoIndividual, eliminarDocumentoIndividual } from "../utils/documentosReemplazoIndividual";
@@ -262,11 +261,7 @@ export const flujoReemplazoService = {
         documentos.some((doc) => doc.get().status !== "aprobado")) {
       throw new AppError("Todos los documentos deben estar aprobados antes de guardar el checklist", 409);
     }
-    const criterio_2 = puntajeRshAutomatico(row.puntajeRsh) ?? candidato.criterio_2;
-    const fecha = row.beneficiarioNuevo?.fecnac_ben;
-    const criterio_3 = puntajeEdadAutomatico(fecha ? new Date(fecha) : null) ?? candidato.criterio_3;
-    const ceros = [candidato.criterio_1, criterio_2, criterio_3].filter((valor) => valor === 0).length;
-    const criterio_4 = ceros === 0 ? 100 : ceros === 1 ? 50 : 0;
+    const { criterio_2, criterio_3, criterio_4 } = candidato;
     await sequelize.transaction(async (transaction) => {
       await repository.actualizar(row.id, {
         criterio_1: candidato.criterio_1, criterio_2, criterio_3, criterio_4,

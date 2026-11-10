@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { limitarRegionProyectos } from '../middlewares/proyectosRegion.middleware';
-import { asignarDecretoProyectoSchema } from '../validations/proyectos.validation';
+
 import { proyectoController } from '../controllers/proyecto.controller';
 import { proyectosController as controller } from '../controllers/proyectos.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
@@ -54,8 +54,6 @@ router.get('/proximo-folio', admin, asyncHandler(controller.proximoFolio));
 router.post('/', admin, validate(guardarProyectoSchema), asyncHandler(controller.crear));
 router.put('/proempleo/:folio', admin, validate(obtenerProyectoSchema), validate(guardarProyectoSchema), asyncHandler(controller.actualizar));
 router.delete('/proempleo/:folio', requireRoles('ADMIN'), validate(eliminarProyectoSchema), asyncHandler(controller.eliminar));
-router.get('/:folio/decretos/disponibles', admin, validate(obtenerProyectoSchema), asyncHandler(controller.decretosDisponibles));
-router.post('/:folio/decretos', admin, validate(asignarDecretoProyectoSchema), asyncHandler(controller.asignarDecreto));
 router.get('/:folio/resumen', admin, validate(obtenerProyectoSchema), asyncHandler(controller.resumen));
 router.get('/:folio/beneficiarios', admin, validate(listarBeneficiariosProyectoSchema), asyncHandler(controller.beneficiarios));
 router.get('/:folio/beneficiarios/buscar', admin, validate(buscarBeneficiarioProyectoSchema), asyncHandler(controller.buscarBeneficiario));

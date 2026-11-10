@@ -34,6 +34,54 @@ function reemplazos(data: GuardarDecretoInput) {
 }
 
 export const decretosRepository = {
+  async desvincularProyecto(folio: string, proyecto: number, usuario: string, transaction: Transaction) {
+    const rows = await sequelize.query<{ id: number }>(`
+      UPDATE dbo.decpro_proempleo SET est_decpro = 'ELIMINADO', usu_eli = :usuario, fec_eli = GETDATE()
+      OUTPUT INSERTED.id
+      WHERE fol_dec = :folio AND fol_pro = :proyecto AND (est_decpro IS NULL OR est_decpro <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT, replacements: { folio, proyecto, usuario }, transaction,
+    });
+    return rows.length > 0;
+  },
+  async regionIntermediario(rut: number, origen: OrigenMarco) {
+    const rows = await sequelize.query<{ region: number }>(`
+      SELECT TOP 1 reg_int region FROM (
+        SELECT rut_int, reg_int, 'legacy' origen FROM dbo.INTERMEDIARIOS
+        UNION ALL SELECT rut_int, reg_int, 'proempleo' origen FROM dbo.intermediarios_proempleo
+      ) i WHERE rut_int = :rut ORDER BY CASE WHEN origen = :origen THEN 0 ELSE 1 END`, {
+      type: QueryTypes.SELECT, replacements: { rut, origen },
+    });
+    return rows[0]?.region;
+  },
+
+  async proyectosAsociados(folio: string, region: number, disponibles: boolean, page: number, buscar: string) {
+    const base = `WITH proyectos AS (
+      SELECT fol_pro, nom_pro, ano_pro, reg_pro, com_pro, est_pro, 'legacy' origen FROM dbo.PROYECTOS
+      UNION ALL SELECT fol_pro, nom_pro, ano_pro, reg_pro, com_pro, est_pro, 'proempleo' origen FROM dbo.proyectos_proempleo
+    ), asociaciones AS (
+      SELECT fol_dec, fol_pro, est_decpro FROM dbo.DECPRO
+      UNION ALL SELECT fol_dec, fol_pro, est_decpro FROM dbo.decpro_proempleo
+    ), filtrados AS (
+      SELECT p.* FROM proyectos p WHERE p.reg_pro = :region AND (p.est_pro IS NULL OR p.est_pro <> 'ELIMINADO')
+        AND (:buscar = '' OR CAST(p.fol_pro AS VARCHAR(20)) LIKE :patron OR p.nom_pro LIKE :patron)
+        AND ${disponibles ? 'NOT' : ''} EXISTS (SELECT 1 FROM asociaciones a WHERE a.fol_dec = :folio AND a.fol_pro = p.fol_pro
+          AND (a.est_decpro IS NULL OR a.est_decpro <> 'ELIMINADO'))
+    )`;
+    const replacements = { folio, region, buscar, patron: `%${buscar}%` };
+    const counts = await sequelize.query<{ total: number }>(`${base} SELECT COUNT(*) total FROM filtrados`, { type: QueryTypes.SELECT, replacements });
+    const total = counts[0].total;
+    const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+    const pagina = Math.min(page, totalPages);
+    const data = await sequelize.query<{ fol_pro: number; nom_pro: string; ano_pro: number | null; origen: OrigenMarco; nombreComuna: string | null }>(`${base}
+      SELECT p.fol_pro, RTRIM(p.nom_pro) nom_pro, p.ano_pro, p.origen, c.nom_com nombreComuna,
+        CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.decpro_proempleo a WHERE a.fol_dec = :folio AND a.fol_pro = p.fol_pro
+          AND (a.est_decpro IS NULL OR a.est_decpro <> 'ELIMINADO')) THEN 1 ELSE 0 END AS BIT) puedeDesvincular
+      FROM filtrados p LEFT JOIN dbo.COMUNAS c ON c.cod_com = p.com_pro
+      ORDER BY p.fol_pro DESC, p.origen OFFSET :offset ROWS FETCH NEXT :limite ROWS ONLY`, {
+      type: QueryTypes.SELECT, replacements: { ...replacements, offset: (pagina - 1) * LIMIT, limite: LIMIT },
+    });
+    return { data, pagination: { page: pagina, limit: LIMIT, total, totalPages } };
+  },
   intermediarios() {
     return IntermediarioModel.findAll({
       attributes: ['rut_int', 'dig_int', 'nom_int', 'reg_int'],

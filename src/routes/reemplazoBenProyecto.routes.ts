@@ -17,6 +17,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 const router = Router();
 
 router.use(requireAuth);
+router.get('/exportar', requirePermisos('REM_VERALL', 'REM_VERREG'), validate(listarReemplazoSchema), asyncHandler(reemplazoBenProyectoController.exportar));
 
 router.get(
   "/regiones",

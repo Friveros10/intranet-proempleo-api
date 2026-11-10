@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+export const proyectosDecretoSchema = z.object({
+  params: z.object({ folio: z.string().trim().min(1).max(8) }),
+  query: z.object({ origen: z.enum(['legacy', 'proempleo']).default('legacy'), page: z.coerce.number().int().positive().default(1), buscar: z.string().trim().max(100).default('') }),
+});
+export const asociarProyectoDecretoSchema = z.object({
+  body: z.object({ fol_pro: z.number().int().positive().max(2147483647), origen: z.enum(['legacy', 'proempleo']), mon_decpro: z.string().trim().regex(/^\d{1,18}$/, 'Ingrese un monto entero válido').refine((v) => /^\d+$/.test(v) && BigInt(v) > 0n, 'El monto debe ser mayor a cero') }).strict(),
+});
+export const buscarProyectoDecretoSchema = z.object({
+  params: z.object({ folio: z.string().trim().min(1).max(8) }),
+  query: z.object({ origen: z.enum(['legacy', 'proempleo']).default('legacy'), fol_pro: z.coerce.number().int().positive().max(2147483647) }),
+});
+export const desvincularProyectoDecretoSchema = z.object({
+  params: z.object({ folio: z.string().trim().min(1).max(8), proyecto: z.coerce.number().int().positive().max(2147483647) }),
+  query: z.object({ origen: z.enum(['legacy', 'proempleo']).default('legacy'), origenProyecto: z.enum(['legacy', 'proempleo']) }),
+});
+
 export const listarDecretosSchema = z.object({
   query: z.object({
     anio: z.coerce.number().int().min(1900).max(9998).optional(),

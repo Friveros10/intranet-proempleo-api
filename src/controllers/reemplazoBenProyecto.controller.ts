@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { reemplazoBenProyectoService } from "../services/reemplazoBenProyecto.service";
 import { AppError } from "../utils/AppError";
+import { exportarReemplazos } from '../services/exportarReemplazos.service';
 import { ListarReemplazoQuery } from "../validations/reemplazoBenProyecto.validation";
 import { flujoReemplazoService } from "../services/flujoReemplazo.service";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
@@ -19,6 +20,11 @@ async function validarPeriodo(req: Request): Promise<void> {
 }
 
 export const reemplazoBenProyectoController = {
+  async exportar(req: Request, res: Response) {
+    if (!req.user) throw new AppError('No autenticado', 401);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await exportarReemplazos(Number(req.user.sub), req.user.roles, req.query as unknown as ListarReemplazoQuery));
+  },
   async listar(req: Request, res: Response): Promise<void> {
     if (!req.user) {
       throw new AppError("No autenticado", 401);

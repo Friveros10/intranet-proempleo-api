@@ -56,7 +56,7 @@ export function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | nu
   }
 
   if (edad < 18) return null;
-  if (edad <= 35) return 0;
+  if (edad <= 30) return 0;
   if (edad <= 45) return 50;
   return 100;
 }
@@ -64,16 +64,7 @@ export function puntajeEdadAutomatico(fechaNacimiento: Date | null): number | nu
 // Lee la fecha de nacimiento del beneficiario nuevo desde los datos adjuntos al
 // reemplazo. El repositorio los deja en dataValues (vienen del UNION entre
 // BENEFICIARIOS y beneficiarios_proempleo), por lo que se leen vía toJSON().
-function fechaNacimientoBeneficiarioNuevo(
-  reemplazo: ReemplazoBenProyectoModel,
-): Date | null {
-  const beneficiario = (reemplazo.toJSON() as unknown as Record<string, unknown>)
-    .beneficiarioNuevo as { fecnac_ben?: string | Date | null } | null | undefined;
-  const valor = beneficiario?.fecnac_ben;
-  if (!valor) return null;
-  const fecha = valor instanceof Date ? valor : new Date(valor);
-  return Number.isNaN(fecha.getTime()) ? null : fecha;
-}
+
 
 // Lee el proyecto asociado al reemplazo. Los includes quedan en dataValues y no
 // se exponen como propiedad directa de la instancia, por lo que se leen vía
@@ -426,18 +417,9 @@ export const reemplazoBenProyectoService = {
       );
     }
 
-    // Los criterios automáticos se calculan con los datos persistidos del candidato.
+    // Los valores iniciales se sugieren en el formulario; se guardan los criterios editados.
     const evaluaciones = data.candidatos.map(({ id, ...criterios }) => {
-      const reemplazo = reemplazos.find((item) => item.id === id)!;
-      const criterio_2 =
-        puntajeRshAutomatico(reemplazo.puntajeRsh) ?? criterios.criterio_2;
-      const criterio_3 =
-        puntajeEdadAutomatico(fechaNacimientoBeneficiarioNuevo(reemplazo)) ??
-        criterios.criterio_3;
-      const ceros = [criterios.criterio_1, criterio_2, criterio_3].filter(
-        (valor) => valor === 0,
-      ).length;
-      const criterio_4 = ceros === 0 ? 100 : ceros === 1 ? 50 : 0;
+      const { criterio_2, criterio_3, criterio_4 } = criterios;
 
       return {
         id,
