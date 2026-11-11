@@ -1,4 +1,6 @@
 import { sequelize } from '../database/sequelize';
+import { coberturaProyectoService } from './coberturaProyecto.service';
+import { coberturaProyectoRepository } from '../repositories/coberturaProyecto.repository';
 import type { Transaction } from 'sequelize';
 import { AppError } from '../utils/AppError';
 import { calcularDv, parseRut } from '../utils/rut';
@@ -268,7 +270,9 @@ export const proyectosService = {
       if (await repository.existeFolio(data.fol_pro, transaction)) {
         throw new AppError('Ya existe un proyecto con ese folio', 409);
       }
+      const coberturas = await coberturaProyectoService.validar(data, transaction);
       await repository.crear(data, nombre, meses, usuario, transaction);
+      await coberturaProyectoRepository.reemplazar(data.fol_pro, 'proempleo', coberturas, usuario, transaction);
       await repository.reemplazarGastos(data.fol_pro, gastos, {
         anio: data.ano_pro,
         mes: Number(data.fecini_pro.slice(5, 7)),
@@ -290,7 +294,9 @@ export const proyectosService = {
       if (!actual || actual.est_pro === 'ELIMINADO') {
         throw new AppError('Proyecto no encontrado para modificar', 404);
       }
+      const coberturas = await coberturaProyectoService.validar(data, transaction);
       await repository.actualizar(folioParam, data, nombre, meses, usuario, transaction);
+      await coberturaProyectoRepository.reemplazar(folioParam, 'proempleo', coberturas, usuario, transaction);
       await repository.reemplazarGastos(folioParam, gastos, {
         anio: data.ano_pro,
         mes: Number(data.fecini_pro.slice(5, 7)),
