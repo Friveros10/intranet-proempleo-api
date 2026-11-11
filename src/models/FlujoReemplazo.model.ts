@@ -26,11 +26,13 @@ FlujoReemplazoModel.init({
   fechaHasta: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 28, validate: { min: 1, max: 31 } },
 }, { sequelize, tableName: "flujo_reemplazo_proempleo", schema: "dbo", timestamps: false });
 
-type CreacionIndividual = Optional<ReemplazoBenProyecto,
+type ReemplazoIndividual = Omit<ReemplazoBenProyecto, "desempate">;
+
+type CreacionIndividual = Optional<ReemplazoIndividual,
   "id" | "comentarioRechazo" | "fechaAprobacionReemplazo" | "criterio_1" | "criterio_2" |
   "criterio_3" | "criterio_4" | "criterio_5" | "ponderacion" | "puntajeRsh">;
 
-export class ReemplazoIndividualModel extends Model<ReemplazoBenProyecto, CreacionIndividual> {
+export class ReemplazoIndividualModel extends Model<ReemplazoIndividual, CreacionIndividual> {
   declare id: number;
   declare proyecto?: ProyectoModel;
 }

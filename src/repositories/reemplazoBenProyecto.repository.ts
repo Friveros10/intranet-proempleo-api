@@ -185,7 +185,8 @@ export const reemplazoBenProyectoRepository = {
     if (!reemplazo) return null;
     reemplazo.status = status;
     reemplazo.comentarioRechazo = comentarioRechazo;
-    reemplazo.fechaAprobacionReemplazo = new Date().toISOString();
+    reemplazo.fechaAprobacionReemplazo =
+      status === 'aprobado' || status === 'rechazado' ? new Date().toISOString() : null;
     await reemplazo.save({ transaction });
     return reemplazo;
   },
@@ -213,6 +214,7 @@ export const reemplazoBenProyectoRepository = {
       criterio_4: number;
       criterio_5: number | null;
       ponderacion: number;
+      desempate: string | null;
     },
     transaction?: Transaction,
   ): Promise<boolean> {

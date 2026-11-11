@@ -141,6 +141,8 @@ const checklistCandidatoSchema = z.object({
 
 export const actualizarChecklistReemplazoSchema = z.object({
   body: z.object({
+    ganadorId: z.number().int().positive().optional(),
+    desempate: z.enum(["Edad", "proyecto", "Tiempo Cesante"]).optional(),
     candidatos: z
       .array(checklistCandidatoSchema)
       .min(1, "Debe evaluar al menos un candidato")
@@ -161,7 +163,7 @@ export const listarReemplazoSchema = z.object({
     fechaDesde: z.string().min(1).optional(),
     fechaHasta: z.string().min(1).optional(),
     status: z
-      .enum(["pendiente", "aprobado", "rechazado", "enRevision", "revisado"])
+      .enum(["pendiente", "preAprobado", "aprobado", "rechazado", "enRevision", "revisado"])
       .optional(),
   }),
 });

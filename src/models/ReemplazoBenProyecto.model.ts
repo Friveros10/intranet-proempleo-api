@@ -7,7 +7,7 @@ import {
   CRITERIO_VALOR_MIN,
 } from '../constants/checklist.constants';
 
-export type ReemplazoStatus = 'pendiente' | 'aprobado' | 'rechazado' | 'enRevision' | 'revisado';
+export type ReemplazoStatus = 'pendiente' | 'preAprobado' | 'aprobado' | 'rechazado' | 'enRevision' | 'revisado';
 
 export interface ReemplazoBenProyecto {
   id: number;
@@ -26,6 +26,7 @@ export interface ReemplazoBenProyecto {
   criterio_5: number | null;
   ponderacion: number | null;
   puntajeRsh: number | null;
+  desempate: string | null;
 }
 
 type ReemplazoCreation = Optional<
@@ -40,6 +41,7 @@ type ReemplazoCreation = Optional<
   | 'criterio_5'
   | 'ponderacion'
   | 'puntajeRsh'
+  | 'desempate'
 >;
 
 function crearCriterioAttribute() {
@@ -74,6 +76,7 @@ export class ReemplazoBenProyectoModel
   declare criterio_5: number | null;
   declare ponderacion: number | null;
   declare puntajeRsh: number | null;
+  declare desempate: string | null;
   declare beneficiarioNuevo?: BeneficiarioModel;
   // Asociación cargada solo cuando se hace include: [{ model: ProyectoModel, as: 'proyecto' }]
   declare proyecto?: ProyectoModel;
@@ -90,7 +93,7 @@ ReemplazoBenProyectoModel.init(
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: 'pendiente',
-      validate: { isIn: [['pendiente', 'aprobado', 'rechazado', 'enRevision', 'revisado']] },
+      validate: { isIn: [['pendiente', 'preAprobado', 'aprobado', 'rechazado', 'enRevision', 'revisado']] },
     },
     comentarioRechazo: { type: DataTypes.STRING(1000), allowNull: true },
     fechaSolicitudReemplazo: { type: DataTypes.DATE, allowNull: false },
@@ -102,6 +105,7 @@ ReemplazoBenProyectoModel.init(
     criterio_5: crearCriterioAttribute(),
     ponderacion: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
     puntajeRsh: { type: DataTypes.INTEGER, allowNull: true, validate: { isInt: true } },
+    desempate: { type: DataTypes.STRING(50), allowNull: true },
   },
   { sequelize, tableName: 'Reemplazo_benpro', schema: 'dbo', timestamps: false }
 );

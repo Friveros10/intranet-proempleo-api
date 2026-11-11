@@ -358,23 +358,41 @@ export const reemplazoBenProyectoService = {
     }
 
     const reemplazoActual = await reemplazoBenProyectoRepository.findById(id);
-    const comentario =
-      status === "rechazado" ? (comentarioRechazo ?? "").trim() || null : null;
-    const actualizado = await reemplazoBenProyectoRepository.actualizarEstado(
-      id,
-      status,
-      comentario,
-    );
-    if (!actualizado) {
+    if (!reemplazoActual) {
       throw new AppError("Reemplazo de Cupo no encontrado", 404);
     }
-    if (status === "aprobado" || status === "rechazado") {
-      await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
-        actualizado.idBeneficiarioNuevo,
-        status === "aprobado" ? 1 : 0,
-        String(rutUsuario),
-      );
+    if (status === "aprobado" && reemplazoActual.status !== "preAprobado") {
+      throw new AppError("Solo se puede aprobar una solicitud pre-aprobada", 409);
     }
+    if (
+      reemplazoActual.ponderacion != null &&
+      (reemplazoActual.status !== "preAprobado" ||
+        (status !== "aprobado" && status !== "rechazado"))
+    ) {
+      throw new AppError("El checklist ya fue resuelto; solo se puede aprobar o rechazar al pre-aprobado", 409);
+    }
+    const comentario =
+      status === "rechazado" ? (comentarioRechazo ?? "").trim() || null : null;
+    const actualizado = await sequelize.transaction(async (transaction) => {
+      const resultado = await reemplazoBenProyectoRepository.actualizarEstado(
+        id,
+        status,
+        comentario,
+        transaction,
+      );
+      if (!resultado) {
+        throw new AppError("Reemplazo de Cupo no encontrado", 404);
+      }
+      if (status === "aprobado" || status === "rechazado") {
+        await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+          resultado.idBeneficiarioNuevo,
+          status === "aprobado" ? 1 : 0,
+          String(rutUsuario),
+          transaction,
+        );
+      }
+      return resultado;
+    });
 
     await auditLogRepository.registrar({
       usuarioId: rutUsuario,
@@ -427,8 +445,8 @@ export const reemplazoBenProyectoService = {
           : {}),
       },
     });
-    if (candidatosDelCupo.some((row) => ["enRevision", "rechazado", "pendiente"].includes(row.status))) {
-      throw new AppError("No se puede guardar el checklist mientras exista un candidato con solicitud en revisión, rechazada o pendiente", 409);
+    if (candidatosDelCupo.some((row) => row.status !== "revisado")) {
+      throw new AppError("Solo se puede guardar el checklist cuando todos los candidatos estén revisados y sin resolver", 409);
     }
     if (candidatosDelCupo.some((row) => !ids.includes(row.id))) {
       throw new AppError("Debes evaluar todos los candidatos del reemplazo", 409);
@@ -456,36 +474,48 @@ export const reemplazoBenProyectoService = {
       };
     });
 
-    const ganador = [...evaluaciones].sort((a, b) => {
-      const diferenciaPonderacion =
-        b.criterios.ponderacion - a.criterios.ponderacion;
-      if (diferenciaPonderacion !== 0) return diferenciaPonderacion;
-      const rutA = reemplazos.find((item) => item.id === a.id)!.idBeneficiarioNuevo;
-      const rutB = reemplazos.find((item) => item.id === b.id)!.idBeneficiarioNuevo;
-      return rutA - rutB;
-    })[0];
+    const mayorPuntaje = Math.max(...evaluaciones.map((item) => item.criterios.ponderacion));
+    const mejores = evaluaciones.filter((item) => item.criterios.ponderacion === mayorPuntaje);
+    const hayEmpate = mejores.length > 1;
+    if (hayEmpate && (!data.ganadorId || !data.desempate)) {
+      throw new AppError("Debes seleccionar un ganador y un criterio de desempate", 400);
+    }
+    const ganador = hayEmpate
+      ? mejores.find((item) => item.id === data.ganadorId)
+      : mejores[0];
+    if (!ganador) {
+      throw new AppError("El ganador debe ser uno de los candidatos empatados con mayor ponderación", 400);
+    }
+    if (!hayEmpate && (data.ganadorId !== undefined || data.desempate !== undefined)) {
+      throw new AppError("Solo se puede seleccionar un ganador y criterio de desempate cuando existe empate", 400);
+    }
+    const criterioDesempate = hayEmpate ? data.desempate ?? null : null;
 
     await sequelize.transaction(async (transaction) => {
       for (const evaluacion of evaluaciones) {
         await reemplazoBenProyectoRepository.actualizarChecklist(
           evaluacion.id,
-          evaluacion.criterios,
+          {
+            ...evaluacion.criterios,
+            desempate: evaluacion.id === ganador.id ? criterioDesempate : null,
+          },
           transaction,
         );
-        const status = evaluacion.id === ganador.id ? "aprobado" : "rechazado";
+        const status = evaluacion.id === ganador.id ? "preAprobado" : "rechazado";
         await reemplazoBenProyectoRepository.actualizarEstado(
           evaluacion.id,
           status,
           null,
           transaction,
         );
-        await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
-          reemplazos.find((item) => item.id === evaluacion.id)!
-            .idBeneficiarioNuevo,
-          status === "aprobado" ? 1 : 0,
-          String(rutUsuario),
-          transaction,
-        );
+        if (status === "rechazado") {
+          await beneficiarioRepository.actualizarStatusPorResultadoReemplazo(
+            reemplazos.find((item) => item.id === evaluacion.id)!.idBeneficiarioNuevo,
+            0,
+            String(rutUsuario),
+            transaction,
+          );
+        }
       }
     });
 
@@ -504,13 +534,13 @@ export const reemplazoBenProyectoService = {
       const esGanador = evaluacion.id === ganador.id;
       await auditLogRepository.registrar({
         usuarioId: rutUsuario,
-        accion: esGanador ? "REEMPLAZO_APROBADO" : "REEMPLAZO_RECHAZADO",
+        accion: esGanador ? "REEMPLAZO_PREAPROBADO" : "REEMPLAZO_RECHAZADO",
         modulo: "REEMPLAZOS",
         entidad: "Reemplazo_benpro",
         registroId: String(evaluacion.id),
         region,
         detalle: esGanador
-          ? `Aprobado automáticamente con ponderación ${evaluacion.criterios.ponderacion}`
+          ? `Pre-aprobado con ponderación ${evaluacion.criterios.ponderacion}${hayEmpate ? `; criterio de desempate: ${data.desempate}` : ""}`
           : `Rechazado automáticamente; ponderación ${evaluacion.criterios.ponderacion}, ganador ${ganador.criterios.ponderacion}`,
         req,
       });
