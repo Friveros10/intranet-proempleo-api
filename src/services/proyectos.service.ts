@@ -248,7 +248,7 @@ export const proyectosService = {
       if (await repository.beneficiarioAsignado(rut.cuerpo, data.anio, data.mes, transaction)) {
         throw new AppError('El beneficiario ya está asignado a un proyecto en este período', 409);
       }
-      await repository.agregarBeneficiario(folio, rut.cuerpo, data, usuario, transaction);
+      await repository.agregarBeneficiario(folio, rut.cuerpo, { ...data, com_ben: proyecto.com_pro }, usuario, transaction);
       return { fol_pro: folio, rut_ben: rut.cuerpo, ...data };
     });
   },

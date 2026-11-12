@@ -335,10 +335,10 @@ export const proyectosRepository = {
     };
     const rows = await sequelize.query<FilaBeneficiario>(`
       WITH asignacionesBase AS (
-        SELECT fol_pro, ano_BenPro AS anio, mes_benpro AS mes, rut_ben, est_benpro, dir_benpro,
+        SELECT fol_pro, ano_BenPro AS anio, mes_benpro AS mes, rut_ben, est_benpro, dir_benpro, com_ben,
           CAST(NULL AS VARCHAR(200)) AS horario_benpro, 'legacy' AS asignacionOrigen FROM dbo.BENPRO
         UNION ALL
-        SELECT fol_pro, ano_BenPro, mes_benpro, rut_ben, est_benpro, dir_benpro, horario_benpro, 'proempleo' FROM dbo.benpro_proempleo
+        SELECT fol_pro, ano_BenPro, mes_benpro, rut_ben, est_benpro, dir_benpro, com_ben, horario_benpro, 'proempleo' FROM dbo.benpro_proempleo
       ), asignaciones AS (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY fol_pro, anio, mes, rut_ben
@@ -351,7 +351,7 @@ export const proyectosRepository = {
         SELECT a.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, c.nom_com AS nombreComuna,
           a.dir_benpro, a.horario_benpro, a.est_benpro, a.asignacionOrigen
         FROM asignaciones a LEFT JOIN beneficiarios b ON b.rut_ben = a.rut_ben AND b.prioridad = 1
-        LEFT JOIN dbo.COMUNAS c ON c.cod_com = b.com_ben
+        LEFT JOIN dbo.COMUNAS c ON c.cod_com = a.com_ben
         WHERE a.fol_pro = :folio AND a.anio = :anio AND a.mes = :mes
           AND a.prioridadAsignacion = 1
           AND (a.est_benpro IS NULL OR RTRIM(a.est_benpro) <> 'ELIMINADO')
@@ -421,18 +421,18 @@ export const proyectosRepository = {
     return (rows[0]?.total ?? 0) > 0;
   },
 
-  async agregarBeneficiario(folio: number, rut: number, data: { anio: number; mes: number; dir_benpro: string; horario_benpro: string }, usuario: string, transaction: Transaction) {
+  async agregarBeneficiario(folio: number, rut: number, data: { anio: number; mes: number; dir_benpro: string; horario_benpro: string; com_ben: number | null }, usuario: string, transaction: Transaction) {
     await sequelize.query(`
       INSERT INTO dbo.benpro_proempleo
         (ano_BenPro, mes_benpro, fol_pro, rut_ben, com_ben, cor_benpro, est_benpro, usu_cre, fec_cre, dir_benpro, horario_benpro)
-      SELECT :anio, :mes, :folio, :rut, b.com_ben,
+      SELECT :anio, :mes, :folio, :rut, :comuna,
         COALESCE((SELECT MAX(cor_benpro) FROM (
           SELECT cor_benpro FROM dbo.BENPRO WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
           UNION ALL SELECT cor_benpro FROM dbo.benpro_proempleo WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
         ) correlativos), 0) + 1, 'ACTIVO', :usuario, GETDATE(), :direccion, :horario
       FROM dbo.beneficiarios_consulta b WHERE b.rut_ben=:rut
       ORDER BY CASE b.origen WHEN 'proempleo' THEN 0 ELSE 1 END OFFSET 0 ROWS FETCH NEXT 1 ROW ONLY`, {
-      type: QueryTypes.INSERT, replacements: { folio, rut, anio: data.anio, mes: data.mes, direccion: data.dir_benpro, horario: data.horario_benpro, usuario }, transaction,
+      type: QueryTypes.INSERT, replacements: { folio, rut, anio: data.anio, mes: data.mes, direccion: data.dir_benpro, horario: data.horario_benpro, comuna: data.com_ben, usuario }, transaction,
     });
   },
 
