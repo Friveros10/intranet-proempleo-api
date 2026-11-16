@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import dashboardRoutes from './dashboard.routes';
 import authRoutes from './auth.routes';
 import auditRoutes from './audit.routes';
 import sicapRoutes from './sicap.routes';
@@ -20,6 +21,7 @@ import condocRoutes from './condoc.routes';
 import oficioCoberturaRoutes from './oficioCobertura.routes';
 
 const router = Router();
+router.use('/dashboard', dashboardRoutes);
 
 router.use('/auth', authRoutes);
 router.use('/audit', auditRoutes);
