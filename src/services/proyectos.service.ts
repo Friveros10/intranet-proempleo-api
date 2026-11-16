@@ -211,14 +211,14 @@ export const proyectosService = {
     return { proyecto, periodos, decretos };
   },
 
-  async beneficiarios(folio: number, query: { origen: OrigenMarco; anio?: number; mes?: number; page: number }) {
+  async beneficiarios(folio: number, query: { origen: OrigenMarco; anio?: number; mes?: number; page: number; rut?: string }) {
     await this.obtener(folio, query.origen);
     const periodos = await repository.periodosBeneficiarios(folio);
     const periodo = query.anio !== undefined && query.mes !== undefined
       ? { anio: query.anio, mes: query.mes }
       : periodos[0] ?? null;
     if (!periodo) return { data: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 }, periodo: null };
-    return { ...await repository.beneficiarios(folio, periodo.anio, periodo.mes, query.page), periodo };
+    return { ...await repository.beneficiarios(folio, periodo.anio, periodo.mes, query.page, query.rut), periodo };
   },
 
   async buscarBeneficiario(folio: number, data: { rut: string; anio: number; mes: number }) {

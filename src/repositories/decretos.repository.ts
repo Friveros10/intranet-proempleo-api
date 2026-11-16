@@ -21,7 +21,7 @@ export type ProgramaDecreto = {
   nombre_mar: string; est_mar: string | null;
 };
 export type GlosaDecreto = { corr_detmar: number; corr_mar: number; glo_detmar: number; nom_detmar: string };
-export type DecretoListado = Omit<Decreto, 'rutint_dec'> & { rutint_dec: number | null; origen: OrigenMarco };
+export type DecretoListado = Omit<Decreto, 'rutint_dec'> & { rutint_dec: number | null; origen: OrigenMarco; nombreIntermediario?: string | null; dvIntermediario?: string | null };
 type Fila = DecretoListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 type DetalleFila = DecretoDetalle & {
   programa_nombre: string | null; programa_anio: number | null;
@@ -122,7 +122,18 @@ export const decretosRepository = {
   async obtener(folio: string, origen: OrigenMarco = 'legacy', transaction?: Transaction) {
     const tabla = origen === 'proempleo' ? 'decretos_proempleo' : 'DECRETOS';
     const rows = await sequelize.query<DecretoListado>(`
-      SELECT ${columnas}, :origen AS origen FROM dbo.[${tabla}] ${transaction ? 'WITH (UPDLOCK, HOLDLOCK)' : ''}
+      SELECT ${columnas}, :origen AS origen, i.nombreIntermediario, i.dvIntermediario
+      FROM dbo.[${tabla}] d ${transaction ? 'WITH (UPDLOCK, HOLDLOCK)' : ''}
+      OUTER APPLY (
+        SELECT TOP (1) RTRIM(nom_int) nombreIntermediario, RTRIM(dig_int) dvIntermediario
+        FROM (
+          SELECT rut_int, nom_int, dig_int, 'legacy' fuente FROM dbo.INTERMEDIARIOS
+          UNION ALL
+          SELECT rut_int, nom_int, dig_int, 'proempleo' FROM dbo.intermediarios_proempleo
+        ) intermediarios
+        WHERE CONVERT(VARCHAR(20), rut_int) = LTRIM(RTRIM(CONVERT(VARCHAR(20), d.rutint_dec)))
+        ORDER BY CASE WHEN fuente = :origen THEN 0 ELSE 1 END
+      ) i
       WHERE fol_dec = :folio`, { type: QueryTypes.SELECT, replacements: { folio, origen }, transaction });
     return rows[0] ?? null;
   },

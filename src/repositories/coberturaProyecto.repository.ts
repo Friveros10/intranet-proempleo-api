@@ -11,10 +11,15 @@ export interface CoberturaProyectoDisponible {
   ano_ofi: number;
   Mes_ofi: number;
   ben_ofi: number;
+  jor_ofi: string | null;
 }
 
 export const coberturaProyectoRepository = {
-  proyectosEnPeriodo(data: GuardarProyectoInput, transaction: Transaction, coberturas: CoberturaProyectoDisponible[]) {
+  proyectosEnPeriodo(
+    data: GuardarProyectoInput,
+    transaction: Transaction,
+    coberturas: CoberturaProyectoDisponible[],
+  ) {
     // Solo consumen cupos los proyectos vinculados a la cobertura de este mes.
     // Los bloqueos de rango se mantienen hasta confirmar proyecto y asociaciones,
     // para que dos creaciones concurrentes no consuman los mismos cupos.
@@ -28,7 +33,12 @@ export const coberturaProyectoRepository = {
       return `(cp.corr_ofi = :corr${i} AND cp.origen_cobertura = :cobertura${i}
         AND cp.ord_ofi = :oficio${i} AND cp.origen_oficio = :origenOficio${i})`;
     });
-    return sequelize.query<{ desde: number; hasta: number; beneficiarios: number }>(`
+    return sequelize.query<{
+      desde: number;
+      hasta: number;
+      beneficiarios: number;
+    }>(
+      `
       WITH proyectos AS (
         SELECT fol_pro, reg_pro, com_pro, fecini_pro, fecter_pro, emp_pro, est_pro,
           'legacy' origen FROM dbo.PROYECTOS WITH (HOLDLOCK)
@@ -46,27 +56,44 @@ export const coberturaProyectoRepository = {
         AND EXISTS (
           SELECT 1 FROM dbo.coberturaProyecto cp WITH (UPDLOCK, HOLDLOCK)
           WHERE cp.fol_pro = p.fol_pro AND cp.origen_proyecto = p.origen
-            AND (${condiciones.join(' OR ')})
+            AND (${condiciones.join(" OR ")})
         )
         AND YEAR(fecini_pro) * 100 + MONTH(fecini_pro) <= :hasta
-        AND YEAR(fecter_pro) * 100 + MONTH(fecter_pro) >= :desde`, {
-      type: QueryTypes.SELECT,
-      replacements: {
-        ...vinculos,
-        region: data.reg_pro, comuna: data.com_pro, folio: data.fol_pro,
-        desde: Number(data.fecini_pro.slice(0, 7).replace('-', '')),
-        hasta: Number(data.fecter_pro.slice(0, 7).replace('-', '')),
-      }, transaction,
-    });
+        AND YEAR(fecter_pro) * 100 + MONTH(fecter_pro) >= :desde`,
+      {
+        type: QueryTypes.SELECT,
+        replacements: {
+          ...vinculos,
+          region: data.reg_pro,
+          comuna: data.com_pro,
+          folio: data.fol_pro,
+          desde: Number(data.fecini_pro.slice(0, 7).replace("-", "")),
+          hasta: Number(data.fecter_pro.slice(0, 7).replace("-", "")),
+        },
+        transaction,
+      },
+    );
   },
 
   async nombreComuna(comuna: number, ciudad: number, transaction: Transaction) {
     const rows = await sequelize.query<{ nombre: string | null }>(
       `SELECT RTRIM(nom_com) AS nombre FROM dbo.COMUNAS
        WHERE cod_com = :comuna AND cod_ciu = :ciudad`,
-      { type: QueryTypes.SELECT, replacements: { comuna, ciudad }, transaction },
+      {
+        type: QueryTypes.SELECT,
+        replacements: { comuna, ciudad },
+        transaction,
+      },
     );
-    return rows[0]?.nombre?.trim() || 'seleccionada';
+    return rows[0]?.nombre?.trim() || "seleccionada";
+  },
+  async nombreRegion(region: number, transaction: Transaction) {
+    const rows = await sequelize.query<{ nombre: string | null }>(
+      `SELECT RTRIM(nom_region) AS nombre FROM dbo.REGIONES
+       WHERE cod_region = :region`,
+      { type: QueryTypes.SELECT, replacements: { region }, transaction },
+    );
+    return rows[0]?.nombre?.trim() || "seleccionada";
   },
 
   disponibles(data: GuardarProyectoInput, transaction: Transaction) {
@@ -77,10 +104,10 @@ export const coberturaProyectoRepository = {
         UNION ALL
         SELECT RTRIM(ord_ofi), fec_ofi, 'proempleo' FROM dbo.ordOficob_proempleo WITH (HOLDLOCK)
       ), coberturas AS (
-        SELECT corr_ofi, RTRIM(ord_ofi) ord_ofi, ano_ofi, Mes_ofi, ben_ofi, cod_reg, cod_com,
+        SELECT corr_ofi, RTRIM(ord_ofi) ord_ofi, ano_ofi, Mes_ofi, ben_ofi, cod_reg, cod_com, jor_ofi,
           'legacy' origen_cobertura FROM dbo.OFICIOCOB WITH (HOLDLOCK)
         UNION ALL
-        SELECT corr_ofi, RTRIM(ord_ofi), ano_ofi, Mes_ofi, ben_ofi, cod_reg, cod_com,
+        SELECT corr_ofi, RTRIM(ord_ofi), ano_ofi, Mes_ofi, ben_ofi, cod_reg, cod_com, jor_ofi,
           'proempleo' FROM dbo.oficiocob_proempleo WITH (HOLDLOCK)
       ), vigentes AS (
         SELECT c.*, o.origen_oficio,
@@ -90,13 +117,14 @@ export const coberturaProyectoRepository = {
         WHERE c.cod_reg = :region AND c.cod_com = :comuna
           AND c.ano_ofi * 100 + c.Mes_ofi BETWEEN :desde AND :hasta
       )
-      SELECT corr_ofi, ord_ofi, origen_cobertura, origen_oficio, ano_ofi, Mes_ofi, ben_ofi
-      FROM vigentes WHERE prioridad = 1`,
+      SELECT corr_ofi, ord_ofi, origen_cobertura, origen_oficio, ano_ofi, Mes_ofi, ben_ofi, RTRIM(jor_ofi) jor_ofi
+      FROM vigentes WHERE prioridad = 1 AND LTRIM(RTRIM(jor_ofi)) = :jornada`,
       {
         type: QueryTypes.SELECT,
         replacements: {
           region: data.reg_pro,
           comuna: data.com_pro,
+          jornada: data.jor_pro,
           desde: Number(data.fecini_pro.slice(0, 7).replace("-", "")),
           hasta: Number(data.fecter_pro.slice(0, 7).replace("-", "")),
         },

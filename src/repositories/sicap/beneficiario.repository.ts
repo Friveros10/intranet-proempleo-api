@@ -1,4 +1,4 @@
-import { IncludeOptions, Op, Transaction, WhereOptions } from "sequelize";
+import { IncludeOptions, Op, QueryTypes, Transaction, WhereOptions } from "sequelize";
 import {
   Beneficiario,
   BeneficiarioModel,
@@ -360,37 +360,31 @@ export const beneficiarioRepository = {
   async findProyectosByRut(
     rut_ben: number,
   ): Promise<ProyectoBeneficiarioRow[]> {
-    const registros = await BenProModel.findAll({
-      where: { rut_ben },
-      include: [
-        {
-          model: ProyectoModel,
-          as: "proyecto",
-          attributes: ["fol_pro", "nom_pro", "reg_pro", "ciu_pro"],
-          include: [
-            {
-              model: RegionModel,
-              as: "region",
-              attributes: ["Nom_region"],
-              required: false,
-            },
-            {
-              model: CiudadModel,
-              as: "ciudad",
-              attributes: ["nom_ciu"],
-              required: false,
-            },
-          ],
-        },
-      ],
-      attributes: ["fol_pro", "ano_BenPro", "mes_benpro", "est_benpro"],
-      order: [
-        ["fol_pro", "ASC"],
-        ["ano_BenPro", "DESC"],
-        ["mes_benpro", "DESC"],
-      ],
+    const registros = await sequelize.query<BenProConProyecto>(`
+      WITH participaciones AS (
+        SELECT fol_pro, ano_BenPro, mes_benpro, est_benpro
+        FROM dbo.BENPRO WHERE rut_ben = :rut
+        UNION ALL
+        SELECT fol_pro, ano_BenPro, mes_benpro, est_benpro
+        FROM dbo.benpro_proempleo WHERE rut_ben = :rut
+      ), proyectos AS (
+        SELECT fol_pro, nom_pro, reg_pro, ciu_pro FROM dbo.PROYECTOS
+        UNION ALL
+        SELECT fol_pro, nom_pro, reg_pro, ciu_pro FROM dbo.proyectos_proempleo
+      )
+      SELECT b.fol_pro, b.ano_BenPro, b.mes_benpro, b.est_benpro,
+        p.nom_pro AS [proyecto.nom_pro],
+        r.Nom_region AS [proyecto.region.Nom_region],
+        c.nom_ciu AS [proyecto.ciudad.nom_ciu]
+      FROM participaciones b
+      LEFT JOIN proyectos p ON p.fol_pro = b.fol_pro
+      LEFT JOIN dbo.REGIONES r ON r.cod_region = p.reg_pro
+      LEFT JOIN dbo.CIUDADES c ON c.cod_ciu = p.ciu_pro
+      ORDER BY b.fol_pro ASC, b.ano_BenPro DESC, b.mes_benpro DESC`, {
+      type: QueryTypes.SELECT,
+      replacements: { rut: rut_ben },
+      nest: true,
     });
-
     const porProyecto = new Map<number, ProyectoBeneficiarioRow>();
 
     for (const registro of registros) {
@@ -701,3 +695,4 @@ export const beneficiarioRepository = {
     };
   },
 };
+

@@ -31,6 +31,24 @@ const rut = 12345678;
 const ficha = { region: 8, ciudad: 101, comuna: 10101, direccion: 'Direccion', email_ben: 'test@example.com' };
 afterEach(() => mock.restoreAll());
 
+test('historial consulta participaciones y proyectos legacy y ProEmpleo conservando periodos', async () => {
+  const query = mock.method(sequelize, 'query', async () => [
+    { fol_pro: 10, ano_BenPro: 2026, mes_benpro: 5, est_benpro: 'ACTIVO', proyecto: { nom_pro: 'Legacy', region: { Nom_region: 'Region' }, ciudad: { nom_ciu: 'Ciudad' } } },
+    { fol_pro: 10, ano_BenPro: 2026, mes_benpro: 3, est_benpro: 'ACTIVO', proyecto: { nom_pro: 'Legacy' } },
+    { fol_pro: 20, ano_BenPro: 2026, mes_benpro: 6, est_benpro: 'ACTIVO', proyecto: { nom_pro: 'ProEmpleo' } },
+  ]);
+  const result = await repository.findProyectosByRut(rut);
+  const [sql, options] = query.mock.calls[0].arguments;
+  for (const table of ['BENPRO', 'benpro_proempleo', 'PROYECTOS', 'proyectos_proempleo']) {
+    assert.ok(sql.includes(`dbo.${table}`));
+  }
+  assert.deepEqual(options.replacements, { rut });
+  assert.equal(result.length, 2);
+  assert.equal(result[0].mes_inicio, '03-2026');
+  assert.equal(result[0].mes_termino, '05-2026');
+  assert.equal(result[1].nom_pro, 'ProEmpleo');
+});
+
 function historico() {
   mock.method(proempleo, 'findOne', async () => null);
   mock.method(legacy, 'findByPk', async () => legacy.build({ rut_ben: rut, reg_ben: 8 }));

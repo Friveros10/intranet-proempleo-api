@@ -50,6 +50,7 @@ export const listarBeneficiariosProyectoSchema = z.object({
     origen: z.enum(['legacy', 'proempleo']).default('legacy'),
     anio: z.coerce.number().int().min(1900).max(3000).optional(),
     mes: z.coerce.number().int().min(1).max(12).optional(),
+    rut: z.string().trim().max(20).regex(/^[0-9.kK\-\s]*$/, 'El RUT no es válido').optional(),
     page: z.coerce.number().int().positive().default(1),
   }).default({}),
 });

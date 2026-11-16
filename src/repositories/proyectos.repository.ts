@@ -326,7 +326,7 @@ export const proyectosRepository = {
     });
   },
 
-  async beneficiarios(folio: number, anio: number, mes: number, page: number) {
+  async beneficiarios(folio: number, anio: number, mes: number, page: number, rut?: string) {
     type FilaBeneficiario = {
       rut_ben: number | null; dig_ben: string | null; nom_ben: string | null; pat_ben: string | null;
       mat_ben: string | null; nombreComuna: string | null; est_benpro: string | null;
@@ -353,6 +353,7 @@ export const proyectosRepository = {
         FROM asignaciones a LEFT JOIN beneficiarios b ON b.rut_ben = a.rut_ben AND b.prioridad = 1
         LEFT JOIN dbo.COMUNAS c ON c.cod_com = a.com_ben
         WHERE a.fol_pro = :folio AND a.anio = :anio AND a.mes = :mes
+          AND CONCAT(CAST(a.rut_ben AS VARCHAR(10)), '-', COALESCE(b.dig_ben, '')) LIKE :rut
           AND a.prioridadAsignacion = 1
           AND (a.est_benpro IS NULL OR RTRIM(a.est_benpro) <> 'ELIMINADO')
       ), numerados AS (
@@ -363,7 +364,8 @@ export const proyectosRepository = {
       SELECT n.*, p.total, p.totalPages, p.pagina FROM pagina p LEFT JOIN numerados n
         ON n.fila BETWEEN ((p.pagina - 1) * :limite + 1) AND (p.pagina * :limite)
       ORDER BY n.fila`, {
-      type: QueryTypes.SELECT, replacements: { folio, anio, mes, pagina: page, limite: BENEFICIARIOS_LIMIT },
+      type: QueryTypes.SELECT, replacements: { folio, anio, mes, pagina: page, limite: BENEFICIARIOS_LIMIT,
+        rut: `%${(rut ?? '').replace(/[.\s]/g, '').toUpperCase()}%` },
     });
     const meta = rows[0];
     const data = rows.filter((row) => row.fila !== null).map(({ fila, total, totalPages, pagina, ...row }) => row);
