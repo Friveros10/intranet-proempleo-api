@@ -4,6 +4,7 @@
   "description": "API Node.js - Intranet CMD (arquitectura por capas)",
   "main": "dist/server.js",
   "scripts": {
+    "seed:encuesta": "ts-node --transpile-only seeders/202611170001-encuesta.ts",
     "test:dashboard": "node -r ts-node/register/transpile-only --test tests/dashboard.test.cjs",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc -p tsconfig.json",
