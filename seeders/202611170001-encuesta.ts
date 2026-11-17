@@ -19,10 +19,12 @@ async function seed(): Promise<void> {
         ELSE
         INSERT INTO dbo.preguntas (pregunta, seccion, tipo, orden, obligatoria)
         VALUES (:pregunta, :seccion, :tipo, :orden, :obligatoria)`, {
-        replacements: { pregunta, seccion, tipo, orden, ordenBusqueda: anterior.length ? index + 1 : orden, obligatoria },
+        replacements: { pregunta, seccion, tipo, orden, ordenBusqueda: anterior.length ? index + (index >= 3 ? 2 : 1) : orden, obligatoria },
         type: QueryTypes.RAW, transaction,
       });
     }
+    // Conserva la pregunta retirada y sus respuestas históricas sin exigirla.
+    await sequelize.query('UPDATE dbo.preguntas SET obligatoria = 0 WHERE seccion = 1 AND orden = 4', { transaction });
   });
 }
 

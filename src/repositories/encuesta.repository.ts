@@ -5,7 +5,7 @@ export interface PreguntaEncuesta { id: number; pregunta: string; seccion: numbe
 export interface ContextoEncuesta { region: string; comuna: string; regionId: number; comunaId: number; ejecutor: string; rut_ejecutor: string; folio: number }
 
 export function listarPreguntas(transaction?: Transaction): Promise<PreguntaEncuesta[]> {
-  return sequelize.query<PreguntaEncuesta>('SELECT id, pregunta, seccion, tipo, orden, obligatoria FROM dbo.preguntas ORDER BY seccion, orden', { type: QueryTypes.SELECT, transaction });
+  return sequelize.query<PreguntaEncuesta>('SELECT id, pregunta, seccion, tipo, orden, obligatoria FROM dbo.preguntas WHERE NOT (seccion = 1 AND orden = 4) ORDER BY seccion, orden', { type: QueryTypes.SELECT, transaction });
 }
 
 export async function buscarBeneficiario(cuerpo: number, dv: string, transaction?: Transaction): Promise<ContextoEncuesta[]> {

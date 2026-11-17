@@ -7,7 +7,7 @@ import { preguntasEncuesta } from './encuesta.catalogo';
 
 export const envioEncuestaSchema = z.object({
   rut: z.string().max(20), folio: z.number().int().positive(),
-  respuestas: z.array(z.object({ preguntaId: z.number().int().positive(), valor: z.string().max(6000) })).max(18),
+  respuestas: z.array(z.object({ preguntaId: z.number().int().positive(), valor: z.string().max(6000) })).max(17),
 });
 
 export function normalizarRut(valor: string): { cuerpo: number; dv: string; rut: string } {
@@ -42,7 +42,6 @@ export function validarRespuestas(preguntas: repo.PreguntaEncuesta[], entradas: 
     if (!valor) continue;
     // Contratos de valores; no son opciones de presentación almacenadas en BD.
     const valido = (p.seccion === 1 && p.orden === 3) ? /^(Trabajador\/a|Dirigente\/a)$/.test(valor)
-      : (p.seccion === 1 && p.orden === 4) ? /^(Menos de 1 año|Entre 1 y 5 años|Más de 5 años)$/.test(valor)
       : p.seccion === 2 ? /^(siempre|casi siempre|a veces|nunca|no aplica)$/.test(valor)
       : (p.seccion === 4 && p.tipo === 'radio') ? /^(siempre|casi siempre|a veces|nunca)$/.test(valor)
       : (p.seccion === 3 && p.tipo === 'radio') ? /^[1-7]$/.test(valor) : true;
