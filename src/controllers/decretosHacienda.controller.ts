@@ -1,10 +1,16 @@
-import { Request, Response } from 'express';
-import { decretosHaciendaService as service } from '../services/decretosHacienda.service';
-import { guardarDecretoHaciendaSchema, listarDecretosHaciendaSchema, obtenerDecretoHaciendaSchema } from '../validations/decretosHacienda.validation';
-import { AppError } from '../utils/AppError';
+import { Request, Response } from "express";
+import { decretosHaciendaService as service } from "../services/decretosHacienda.service";
+import {
+  guardarDecretoHaciendaSchema,
+  listarDecretosHaciendaSchema,
+  obtenerDecretoHaciendaSchema,
+  programasDecretoHaciendaSchema,
+} from "../validations/decretosHacienda.validation";
+import { AppError } from "../utils/AppError";
 
 function usuario(req: Request) {
-  if (!req.user || !/^\d{1,50}$/.test(req.user.sub)) throw new AppError('Sesión inválida', 401);
+  if (!req.user || !/^\d{1,50}$/.test(req.user.sub))
+    throw new AppError("Sesión inválida", 401);
   return req.user.sub;
 }
 
@@ -16,11 +22,17 @@ export const decretosHaciendaController = {
   async anios(_req: Request, res: Response) {
     res.json(await service.anios());
   },
-  async programas(_req: Request, res: Response) {
-    res.json(await service.programas());
+  async programas(req: Request, res: Response) {
+    const { query } = programasDecretoHaciendaSchema.parse({
+      query: req.query,
+    });
+    res.json(await service.programas(query.anio));
   },
   async obtener(req: Request, res: Response) {
-    const { params, query } = obtenerDecretoHaciendaSchema.parse({ params: req.params, query: req.query });
+    const { params, query } = obtenerDecretoHaciendaSchema.parse({
+      params: req.params,
+      query: req.query,
+    });
     res.json(await service.obtener(params.folio, query.origen));
   },
   async crear(req: Request, res: Response) {
