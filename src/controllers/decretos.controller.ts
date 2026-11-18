@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { decretosService as service } from '../services/decretos.service';
-import { guardarDecretoSchema, listarDecretosSchema, obtenerDecretoSchema } from '../validations/decretos.validation';
+import { glosasDecretoSchema, guardarDecretoSchema, listarDecretosSchema, obtenerDecretoSchema, programasDecretoSchema } from '../validations/decretos.validation';
 import { AppError } from '../utils/AppError';
 import { desvincularProyectoDecretoSchema } from '../validations/decretos.validation';
 import { proyectosDecretoSchema, asociarProyectoDecretoSchema, buscarProyectoDecretoSchema } from '../validations/decretos.validation';
@@ -40,15 +40,17 @@ export const decretosController = {
   async anios(_req: Request, res: Response) {
     res.json(await service.anios());
   },
-  async programas(_req: Request, res: Response) {
-    res.json(await service.programas());
+  async programas(req: Request, res: Response) {
+    const { query } = programasDecretoSchema.parse({ query: req.query });
+    res.json(await service.programas(query.anio));
   },
   async obtener(req: Request, res: Response) {
     const { params, query } = obtenerDecretoSchema.parse({ params: req.params, query: req.query });
     res.json(await service.obtener(params.folio, query.origen));
   },
   async glosas(req: Request, res: Response) {
-    res.json(await service.glosas(Number(req.params.id)));
+    const { params, query } = glosasDecretoSchema.parse({ params: req.params, query: req.query });
+    res.json(await service.glosas(params.id, query.anio));
   },
   async crear(req: Request, res: Response) {
     const { body } = guardarDecretoSchema.parse({ body: req.body });

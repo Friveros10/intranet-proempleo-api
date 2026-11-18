@@ -12,20 +12,21 @@ const columnas = `RTRIM(fol_dec) AS fol_dec, RTRIM(folprov_dec) AS folprov_dec, 
   usu_eli, fec_eli, est_dec, rutint_dec, programaInt`;
 const union = `SELECT ${columnas}, 'legacy' AS origen FROM dbo.DECRETOS
   UNION ALL SELECT ${columnas}, 'proempleo' AS origen FROM dbo.decretos_proempleo`;
-const marcos = `SELECT corr_mar, ano_mar, subtitulo_mar, item_mar, linea_mar, nombre_mar, est_mar FROM dbo.MARCO
-  UNION ALL SELECT corr_mar, ano_mar, subtitulo_mar, item_mar, linea_mar, nombre_mar, est_mar FROM dbo.marco_proempleo`;
-const glosas = `SELECT corr_detmar, corr_mar, glo_detmar, nom_detmar FROM dbo.MARCODET
-  UNION ALL SELECT corr_detmar, corr_mar, glo_detmar, nom_detmar FROM dbo.marcodet_proempleo`;
+const marcos = `SELECT corr_mar, ano_mar, subtitulo_mar, item_mar, linea_mar, nombre_mar, est_mar, monto_mar, 'legacy' origen FROM dbo.MARCO
+  UNION ALL SELECT corr_mar, ano_mar, subtitulo_mar, item_mar, linea_mar, nombre_mar, est_mar, monto_mar, 'proempleo' FROM dbo.marco_proempleo`;
+const glosas = `SELECT corr_detmar, corr_mar, CONVERT(VARCHAR(50), glo_detmar) glo_detmar, nom_detmar, mon_detmar, 'legacy' origen FROM dbo.MARCODET
+  UNION ALL SELECT corr_detmar, corr_mar, CONVERT(VARCHAR(50), glo_detmar), nom_detmar, mon_detmar, 'proempleo' FROM dbo.marcodet_proempleo`;
 export type ProgramaDecreto = {
   corr_mar: number; ano_mar: number; subtitulo_mar: number; item_mar: number; linea_mar: number;
   nombre_mar: string; est_mar: string | null;
 };
-export type GlosaDecreto = { corr_detmar: number; corr_mar: number; glo_detmar: number; nom_detmar: string };
+export type GlosaDecreto = { corr_detmar: number; corr_mar: number; glo_detmar: string | null; nom_detmar: string };
+type GlosaConPresupuesto = GlosaDecreto & { montoMarco: string; totalAsignado: string; saldo: string };
 export type DecretoListado = Omit<Decreto, 'rutint_dec'> & { rutint_dec: number | null; origen: OrigenMarco; nombreIntermediario?: string | null; dvIntermediario?: string | null };
 type Fila = DecretoListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 type DetalleFila = DecretoDetalle & {
   programa_nombre: string | null; programa_anio: number | null;
-  glosa_nombre: string | null; glosa_codigo: number | null;
+  glosa_nombre: string | null; glosa_codigo: string | null;
 };
 
 function reemplazos(data: GuardarDecretoInput) {
@@ -161,21 +162,78 @@ export const decretosRepository = {
 
   programas(anio: number) {
     return sequelize.query<ProgramaDecreto>(`WITH programas AS (${marcos})
-      SELECT * FROM programas WHERE ano_mar = :anio AND est_mar = 'ACTIVO' ORDER BY nombre_mar, corr_mar`,
+      SELECT corr_mar, ano_mar, subtitulo_mar, item_mar, linea_mar, nombre_mar, est_mar
+      FROM programas WHERE ano_mar = :anio AND est_mar = 'ACTIVO' ORDER BY nombre_mar, corr_mar`,
     { type: QueryTypes.SELECT, replacements: { anio } });
   },
 
-  glosas(id: number) {
-    return sequelize.query<GlosaDecreto>(`WITH glosas AS (${glosas})
-      SELECT * FROM glosas WHERE corr_mar = :id ORDER BY glo_detmar, corr_detmar`,
-    { type: QueryTypes.SELECT, replacements: { id } });
+  glosas(id: number, anio: number) {
+    return sequelize.query<GlosaConPresupuesto>(`
+      WITH programas AS (${marcos}), glosas AS (${glosas}),
+      programa AS (
+        SELECT corr_mar, origen, monto_mar FROM programas
+        WHERE corr_mar = :id AND ano_mar = :anio AND est_mar = 'ACTIVO'
+      ), detalleMarco AS (
+        SELECT g.* FROM glosas g JOIN programa p ON p.corr_mar = g.corr_mar AND p.origen = g.origen
+        WHERE g.corr_detmar > 0
+      ), opciones AS (
+        SELECT 0 corr_detmar, corr_mar, CAST(NULL AS VARCHAR(50)) glo_detmar, N'Ejecución' nom_detmar, origen FROM programa
+        UNION ALL SELECT corr_detmar, corr_mar, glo_detmar, nom_detmar, origen FROM detalleMarco
+      ), base AS (
+        SELECT p.origen, COALESCE(CAST(p.monto_mar AS DECIMAL(34, 6)), 0) -
+          COALESCE(CAST(SUM(CAST(g.mon_detmar AS DECIMAL(34, 6))) AS DECIMAL(34, 6)), 0) monto
+        FROM programa p LEFT JOIN detalleMarco g ON g.origen = p.origen
+        GROUP BY p.origen, p.monto_mar
+      ), hacienda AS (
+        SELECT d.corr_detmar, d.mon_dethac, 'legacy' origen FROM dbo.DETDECHACIENDA d
+        JOIN dbo.DECHACIENDA h ON h.fol_dechac = d.fol_dechac
+        WHERE d.corr_mar = :id AND h.fec_dechac >= DATEFROMPARTS(:anio, 1, 1)
+          AND h.fec_dechac < DATEFROMPARTS(:anio + 1, 1, 1)
+        UNION ALL
+        SELECT d.corr_detmar, d.mon_dethac, d.origen_mar FROM dbo.detdechacienda_proempleo d
+        JOIN dbo.dechacienda_proempleo h ON h.fol_dechac = d.fol_dechac
+        WHERE d.corr_mar = :id AND h.fec_dechac >= DATEFROMPARTS(:anio, 1, 1)
+          AND h.fec_dechac < DATEFROMPARTS(:anio + 1, 1, 1)
+      ), asignaciones AS (
+        SELECT d.corr_detmar, d.mon_decdet FROM dbo.DECDET d
+        JOIN dbo.DECRETOS h ON h.fol_dec = d.fol_dec
+        WHERE d.corr_mar = :id AND h.ano_dec = :anio
+        UNION ALL
+        SELECT d.corr_detmar, d.mon_decdet FROM dbo.decretosDetalle_proempleo d
+        JOIN dbo.decretos_proempleo h ON h.fol_dec = d.fol_dec
+        WHERE d.corr_mar = :id AND h.ano_dec = :anio
+      ), totalHacienda AS (
+        SELECT corr_detmar, origen, CAST(SUM(CAST(mon_dethac AS DECIMAL(34, 6))) AS DECIMAL(34, 6)) monto
+        FROM hacienda GROUP BY corr_detmar, origen
+      ), totalDecretos AS (
+        SELECT corr_detmar, CAST(SUM(CAST(mon_decdet AS DECIMAL(34, 6))) AS DECIMAL(34, 6)) monto
+        FROM asignaciones GROUP BY corr_detmar
+      ), consolidado AS (
+        SELECT o.corr_detmar, o.corr_mar, o.glo_detmar, o.nom_detmar,
+          CASE WHEN o.corr_detmar = 0 THEN b.monto
+            ELSE COALESCE(CAST(g.mon_detmar AS DECIMAL(34, 6)), 0)
+          END + COALESCE(h.monto, 0) montoMarco, COALESCE(d.monto, 0) totalAsignado
+        FROM opciones o JOIN base b ON b.origen = o.origen
+        LEFT JOIN detalleMarco g ON g.corr_detmar = o.corr_detmar AND g.origen = o.origen
+        LEFT JOIN totalHacienda h ON h.corr_detmar = o.corr_detmar AND h.origen = o.origen
+        LEFT JOIN totalDecretos d ON d.corr_detmar = o.corr_detmar
+      )
+      SELECT corr_detmar, corr_mar, glo_detmar, nom_detmar, CONVERT(VARCHAR(50), montoMarco) montoMarco,
+        CONVERT(VARCHAR(50), totalAsignado) totalAsignado, CONVERT(VARCHAR(50), montoMarco - totalAsignado) saldo
+      FROM consolidado ORDER BY CASE WHEN corr_detmar = 0 THEN 0 ELSE 1 END,
+        CASE WHEN glo_detmar NOT LIKE '%[^0-9]%' THEN LEN(glo_detmar) END,
+        glo_detmar, corr_detmar`,
+    { type: QueryTypes.SELECT, replacements: { id, anio } });
   },
 
   async referenciaDisponible(id: number, glosa: number, anio: number, transaction: Transaction) {
     const rows = await sequelize.query<{ corr_mar: number }>(`
       WITH programas AS (${marcos}), glosas AS (${glosas})
-      SELECT p.corr_mar FROM programas p JOIN glosas g ON g.corr_mar = p.corr_mar
-      WHERE p.corr_mar = :id AND g.corr_detmar = :glosa AND p.ano_mar = :anio AND p.est_mar = 'ACTIVO'`,
+      SELECT p.corr_mar FROM programas p
+      WHERE p.corr_mar = :id AND p.ano_mar = :anio AND p.est_mar = 'ACTIVO'
+        AND (:glosa = 0 OR EXISTS (
+          SELECT 1 FROM glosas g WHERE g.corr_mar = p.corr_mar AND g.origen = p.origen AND g.corr_detmar = :glosa
+        ))`,
     { type: QueryTypes.SELECT, replacements: { id, glosa, anio }, transaction });
     return rows.length === 1;
   },

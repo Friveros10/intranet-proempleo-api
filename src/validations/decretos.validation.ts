@@ -38,7 +38,12 @@ export const programasIntermediario = [
 export const coberturasDecreto = ['Regular', 'Administracion', 'Fueros'] as const;
 const monto = z.string().regex(/^\d{1,18}$/, 'El monto debe ser un entero no negativo de hasta 18 dígitos');
 const id = z.number().int().positive().max(2147483647);
-export const glosasDecretoSchema = z.object({ params: z.object({ id: z.coerce.number().int().positive().max(2147483647) }) });
+const anioPresupuesto = z.coerce.number().int().min(1900).max(9998);
+export const programasDecretoSchema = z.object({ query: z.object({ anio: anioPresupuesto }) });
+export const glosasDecretoSchema = z.object({
+  params: z.object({ id: z.coerce.number().int().positive().max(2147483647) }),
+  query: z.object({ anio: anioPresupuesto }),
+});
 export const guardarDecretoSchema = z.object({
   body: z.object({
     fol_dec: z.string().regex(/^A\d{2}[DRESP]\d{1,4}$/, 'Folio inválido'),
@@ -55,13 +60,20 @@ export const guardarDecretoSchema = z.object({
     rutint_dec: id,
     programaInt: z.enum(programasIntermediario),
     detalles: z.array(z.object({
-      corr_mar: id, corr_detmar: id, mon_decdet: monto,
+      corr_mar: id, corr_detmar: z.number().int().nonnegative().max(2147483647), mon_decdet: monto,
       sublinea: z.enum(['DPR', 'GORE', 'GORE-CONV']),
     }).strict()).min(1).max(100),
   }).strict().superRefine((data, ctx) => {
     if ((data.fol_dec[3] === 'P' ? data.fol_dec : null) !== data.folprov_dec) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['folprov_dec'], message: 'El folio provisorio debe coincidir con el folio de tipo P' });
     }
+  }).transform((data, ctx) => {
+    const total = data.detalles.reduce((sum, detalle) => sum + BigInt(detalle.mon_decdet), 0n).toString();
+    if (total.length > 18) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['mon_dec'], message: 'La suma de las glosas supera el máximo de 18 dígitos.' });
+      return z.NEVER;
+    }
+    return { ...data, mon_dec: total };
   }),
 });
 export type GuardarDecretoInput = z.infer<typeof guardarDecretoSchema>['body'];

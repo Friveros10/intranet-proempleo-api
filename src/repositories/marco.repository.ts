@@ -1,3 +1,4 @@
+import { insertarConCorrelativo } from './correlativosPresupuesto.sql';
 import { QueryTypes, Transaction } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 import type { MarcoProempleo } from '../models/MarcoProempleo.model';
@@ -69,11 +70,9 @@ export const marcoRepository = {
   },
 
   async crear(data: GuardarMarcoInput, usuario: string, transaction: Transaction) {
-    const rows = await sequelize.query<{ corr_mar: number }>(`
-      INSERT INTO [dbo].[marco_proempleo]
-        ([ano_mar], [subtitulo_mar], [item_mar], [linea_mar], [nombre_mar], [monto_mar], [est_mar], [ema_mar], [tip_mar], [usu_cre], [fec_cre])
-      OUTPUT INSERTED.[corr_mar]
-      VALUES (:ano_mar, :subtitulo_mar, :item_mar, :linea_mar, :nombre_mar, :monto_mar, :est_mar, :ema_mar, :tip_mar, :usuario, GETDATE())`,
+    const rows = await sequelize.query<{ corr_mar: number }>(insertarConCorrelativo('MARCO', 'marco_proempleo', 'corr_mar',
+      '[ano_mar], [subtitulo_mar], [item_mar], [linea_mar], [nombre_mar], [monto_mar], [est_mar], [ema_mar], [tip_mar], [usu_cre], [fec_cre]',
+      ':ano_mar, :subtitulo_mar, :item_mar, :linea_mar, :nombre_mar, :monto_mar, :est_mar, :ema_mar, :tip_mar, :usuario, GETDATE()'),
     { type: QueryTypes.SELECT, replacements: { ...data, usuario }, transaction });
     return rows[0].corr_mar;
   },
@@ -96,12 +95,10 @@ export const marcoRepository = {
           [usu_mod] = :usuario, [fec_mod] = GETDATE()
         WHERE [corr_mar] = :corr_mar AND [corr_detmar] = :corr_detmar`, { replacements, transaction });
     } else {
-      await sequelize.query(`
-        INSERT INTO [dbo].[marcodet_proempleo]
-          ([corr_mar], [ano_mar], [subtitulo_mar], [item_mar], [linea_mar], [glo_detmar], [nom_detmar],
-           [acc_detmar], [mon_detmar], [usu_cre], [fec_cre])
-        VALUES (:corr_mar, :ano_mar, :subtitulo_mar, :item_mar, :linea_mar, :glo_detmar, :nom_detmar,
-          :acc_detmar, :mon_detmar, :usuario, GETDATE())`, { replacements, transaction });
+      await sequelize.query(insertarConCorrelativo('MARCODET', 'marcodet_proempleo', 'corr_detmar',
+        '[corr_mar], [ano_mar], [subtitulo_mar], [item_mar], [linea_mar], [glo_detmar], [nom_detmar], [acc_detmar], [mon_detmar], [usu_cre], [fec_cre]',
+        ':corr_mar, :ano_mar, :subtitulo_mar, :item_mar, :linea_mar, :glo_detmar, :nom_detmar, :acc_detmar, :mon_detmar, :usuario, GETDATE()'),
+      { replacements, transaction });
     }
   },
 

@@ -1,4 +1,5 @@
 import { QueryTypes, Transaction } from "sequelize";
+import { insertarConCorrelativo } from "./correlativosPresupuesto.sql";
 import { sequelize } from "../database/sequelize";
 import type { DecretoHacienda } from "../models/DecretosHacienda.model";
 import type { DecretoHaciendaDetalleProempleo } from "../models/DecretosHaciendaDetalleProempleo.model";
@@ -293,10 +294,13 @@ export const decretosHaciendaRepository = {
     };
     if (detalle.corr_dethac === undefined) {
       await sequelize.query(
-        `
-        INSERT INTO [dbo].[detdechacienda_proempleo]
-          (fol_dechac, corr_mar, corr_detmar, origen_mar, glosa_dethac, acc_dethac, mon_dethac)
-        VALUES (:folio, :corr_mar, :corr_detmar, :origen_mar, :glosa_dethac, :acc_dethac, :mon_dethac)`,
+        insertarConCorrelativo(
+          "DETDECHACIENDA",
+          "detdechacienda_proempleo",
+          "corr_dethac",
+          "fol_dechac, corr_mar, corr_detmar, origen_mar, glosa_dethac, acc_dethac, mon_dethac",
+          ":folio, :corr_mar, :corr_detmar, :origen_mar, :glosa_dethac, :acc_dethac, :mon_dethac",
+        ),
         { replacements, transaction },
       );
     } else {

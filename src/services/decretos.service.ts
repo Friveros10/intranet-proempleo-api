@@ -69,13 +69,12 @@ export const decretosService = {
     return repository.anios();
   },
 
-  async programas() {
-    const anio = new Date().getFullYear();
+  async programas(anio: number) {
     return { anio, data: await repository.programas(anio) };
   },
 
-  glosas(id: number) {
-    return repository.glosas(id);
+  glosas(id: number, anio: number) {
+    return repository.glosas(id, anio);
   },
 
   async obtener(folio: string, origen: OrigenMarco = 'legacy', transaction?: Transaction) {
@@ -106,7 +105,7 @@ export const decretosService = {
       if (!decreto) throw new AppError('Decreto no encontrado para modificar', 404);
       if (data.folprov_dec !== decreto.folprov_dec) throw new AppError('El folio provisorio no se puede modificar', 400);
       const anteriores = await repository.detalles(folio, 'proempleo', transaction);
-      await validarReferencias(data, transaction, anteriores);
+      await validarReferencias(data, transaction, decreto.ano_dec === data.ano_dec ? anteriores : []);
       await repository.actualizar(folio, data, usuario, transaction);
       await repository.reemplazarDetalles(folio, data.detalles, transaction);
       return this.obtener(folio, 'proempleo', transaction);
@@ -128,8 +127,8 @@ async function validarReferencias(data: GuardarDecretoInput, transaction: Transa
     if (anteriores.some((item) => item.corr_mar === detalle.corr_mar && item.corr_detmar === detalle.corr_detmar)) continue;
     const key = `${detalle.corr_mar}:${detalle.corr_detmar}`;
     if (verificadas.has(key)) continue;
-    if (!await repository.referenciaDisponible(detalle.corr_mar, detalle.corr_detmar, new Date().getFullYear(), transaction)) {
-      throw new AppError('La glosa no pertenece al programa o el programa no está activo en el año en curso', 400);
+    if (!await repository.referenciaDisponible(detalle.corr_mar, detalle.corr_detmar, data.ano_dec, transaction)) {
+      throw new AppError('La glosa no pertenece al programa o el programa no está activo en el año del decreto', 400);
     }
     verificadas.add(key);
   }
