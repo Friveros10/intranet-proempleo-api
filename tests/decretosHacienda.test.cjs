@@ -25,7 +25,7 @@ afterEach(() => mock.restoreAll());
 function entrada() {
   return {
     fol_dechac: 'A10DH0025', fec_dechac: '2026-06-30', mon_dechac: '999999999999999999', obs_dechac: null,
-    detalles: [{ corr_mar: 12, origen_mar: 'proempleo', glosa_dethac: 'EJECUCION', acc_dethac: 'Resta', mon_dethac: '9007199254740993' }],
+    detalles: [{ corr_mar: 12, origen_mar: 'proempleo', corr_detmar: 0, acc_dethac: 'Resta', mon_dethac: '9007199254740993' }],
   };
 }
 
@@ -108,18 +108,20 @@ test('busqueda literal, pagina vacia y folios coincidentes mantienen origen', as
   assert.deepEqual((await repo.listar({ page: 1 })).data.map((row) => row.origen), ['legacy', 'proempleo']);
 });
 
-test('catalogo de anios une ambas tablas; programas une activos del anio actual sin paginacion', async () => {
+test('catalogo de anios une ambas tablas; programas agrupa glosas de ambos marcos activos del año solicitado', async () => {
   const query = mock.method(sequelize, 'query', async () => [{ anio: 2026 }, { anio: 2025 }]);
   assert.deepEqual(await repo.anios(), [2026, 2025]);
   assert.match(query.mock.calls[0].arguments[0], /UNION SELECT YEAR\(fec_dechac\)/);
-  query.mock.mockImplementation(async () => Array.from({ length: 25 }, (_, i) => ({ corr_mar: i + 1 })));
-  assert.equal((await service.programas()).data.length, 25);
+  query.mock.mockImplementation(async () => Array.from({ length: 25 }, (_, i) => ({ corr_mar: i + 1, origen: 'legacy', corr_detmar: i + 10, glo_detmar: 1, nom_detmar: 'Glosa' })));
+  const catalogo = await service.programas(2027);
+  assert.equal(catalogo.data.length, 25);
+  assert.deepEqual(catalogo.data[0].glosas, [{ corr_detmar: 10, glo_detmar: 1, nom_detmar: 'Glosa' }]);
   const [sql, options] = query.mock.calls[1].arguments;
   assert.match(sql, /FROM \[dbo\]\.\[MARCO\]/);
   assert.match(sql, /FROM \[dbo\]\.\[marco_proempleo\]/);
-  assert.match(sql, /WHERE ano_mar = :anio AND est_mar = 'ACTIVO'/);
+  assert.match(sql, /WHERE p\.ano_mar = :anio AND p\.est_mar = 'ACTIVO'/);
   assert.doesNotMatch(sql, /OFFSET|FETCH|TOP /);
-  assert.equal(options.replacements.anio, new Date().getFullYear());
+  assert.equal(options.replacements.anio, 2027);
 });
 
 test('ficha legacy une solo MARCO/MARCODET legacy y conserva acciones y montos originales', async () => {
@@ -138,10 +140,10 @@ test('ficha legacy une solo MARCO/MARCODET legacy y conserva acciones y montos o
   const sql = query.mock.calls[1].arguments[0];
   assert.match(sql, /FROM \[dbo\]\.\[DETDECHACIENDA\] d/);
   assert.match(sql, /p.origen = 'legacy'/);
-  assert.match(sql, /g.corr_mar = d.corr_mar AND g.corr_detmar = d.corr_detmar/);
+  assert.match(sql, /g.corr_mar = p.corr_mar AND g.origen = p.origen/);
 });
 
-test('detalle ProEmpleo resuelve programa por ID y origen, guarda etiquetas no referencias inventadas', async () => {
+test('detalle ProEmpleo resuelve el programa por ID y origen y lee las etiquetas anteriores', async () => {
   const query = mock.method(sequelize, 'query', async () => [{
     corr_dethac: 3, corr_mar: 12, corr_detmar: null, origen_mar: 'proempleo', glosa_dethac: 'EJECUCION',
     programa_nombre: 'Programa nuevo', programa_anio: 2026, glosa_nombre: null, glosa_codigo: null,
@@ -169,13 +171,20 @@ test('ficha inexistente devuelve 404; una cabecera sin detalles conserva lista v
 
 test('validacion respeta calendario, numeric(18,0), longitudes y opciones, rechaza auditoria/IDs ficticios', () => {
   assert.equal(guardarSchema.safeParse({ body: entrada() }).success, true);
+  const glosa = { ...entrada().detalles[0], corr_detmar: 18 };
+  assert.equal(guardarSchema.safeParse({ body: { ...entrada(), detalles: [glosa] } }).success, false);
+  assert.equal(guardarSchema.safeParse({ body: { ...entrada(), detalles: [glosa, ...entrada().detalles] } }).success, true);
+  assert.equal(guardarSchema.parse({ body: { ...entrada(), detalles: [glosa, ...entrada().detalles] } }).body.mon_dechac, '18014398509481986');
+  assert.equal(guardarSchema.safeParse({ body: { ...entrada(), detalles: [
+    ...entrada().detalles, { ...glosa, mon_dethac: '999999999999999999' },
+  ] } }).success, false);
   assert.equal(guardarSchema.safeParse({ body: { ...entrada(), fec_dechac: '2024-02-29' } }).success, true);
   for (const data of [
     { fec_dechac: '2026-02-29' }, { fec_dechac: '2026-06-31' }, { fec_dechac: '2026-06-30T00:00:00Z' },
     { fec_dechac: '1752-01-01' }, { fol_dechac: 'a'.repeat(51) }, { fol_dechac: '../folio' },
     { mon_dechac: '1.5' }, { mon_dechac: '1e5' }, { mon_dechac: '1'.repeat(19) }, { mon_dechac: '-1' },
     { obs_dechac: 'a'.repeat(201) }, { usu_cre: 'otro' }, { detalles: [] },
-    { detalles: [{ ...entrada().detalles[0], corr_detmar: 1 }] },
+    { detalles: [{ ...entrada().detalles[0], corr_detmar: -1 }] },
     { detalles: [{ ...entrada().detalles[0], origen_mar: 'otro' }] },
     { detalles: [{ ...entrada().detalles[0], glosa_dethac: 'otra' }] },
     { detalles: [{ ...entrada().detalles[0], acc_dethac: 'otra' }] },
@@ -210,7 +219,8 @@ test('crear valida programas activos de ambos origenes y solo escribe en tablas 
   assert.equal(query.mock.calls[0].arguments[1].replacements.mesFecha, 6);
   assert.equal(query.mock.calls[0].arguments[1].replacements.diaFecha, 30);
   assert.equal(query.mock.calls[0].arguments[1].replacements.mon_dechac, '999999999999999999');
-  assert.match(query.mock.calls[1].arguments[0], /VALUES \(:folio, :corr_mar, NULL,/);
+  assert.equal(query.mock.calls[1].arguments[1].replacements.corr_detmar, 0);
+  assert.match(query.mock.calls[1].arguments[0], /VALUES \(:folio, :corr_mar, :corr_detmar,/);
   assert.deepEqual(ficha.mock.calls[0].arguments, ['A10DH0025', 'proempleo', tx]);
 });
 
@@ -222,7 +232,7 @@ test('crear rechaza folio duplicado, ID preasignado o programa no disponible ant
   await assert.rejects(service.crear(entrada(), '1'), (err) => err.statusCode === 409);
   assert.throws(() => service.crear({ ...entrada(), detalles: [{ ...entrada().detalles[0], corr_dethac: 1 }] }, '1'), /identificadores/);
   obtener.mock.mockImplementation(async () => null);
-  await assert.rejects(service.crear(entrada(), '1'), /no está activo/);
+  await assert.rejects(service.crear(entrada(), '1'), /debe estar activo/);
   assert.equal(crear.mock.calls.length, 0);
   assert.equal(programa.mock.calls.length, 1);
   obtener.mock.mockImplementation(async (_folio, origen) => origen === 'legacy' ? {} : null);
@@ -230,7 +240,7 @@ test('crear rechaza folio duplicado, ID preasignado o programa no disponible ant
   assert.equal(crear.mock.calls.length, 0);
 });
 
-test('editar preserva IDs y programas historicos sin cambios; agrega, modifica y elimina detalles propios', async () => {
+test('editar conserva IDs y valida todos los programas contra el año del decreto', async () => {
   const tx = {};
   mock.method(sequelize, 'transaction', async (callback) => callback(tx));
   mock.method(repo, 'obtener', async () => ({ fol_dechac: 'A10DH0025' }));
@@ -247,8 +257,9 @@ test('editar preserva IDs y programas historicos sin cambios; agrega, modifica y
     { ...entrada().detalles[0], corr_mar: 13, origen_mar: 'legacy' },
   ] };
   await service.actualizar(data.fol_dechac, data, '2');
-  assert.equal(programa.mock.calls.length, 1);
-  assert.deepEqual(programa.mock.calls[0].arguments, [13, 'legacy', new Date().getFullYear(), tx]);
+  assert.deepEqual(programa.mock.calls.map((call) => call.arguments), [
+    [12, 'proempleo', 2026, 0, tx], [13, 'legacy', 2026, 0, tx],
+  ]);
   assert.deepEqual(remove.mock.calls[0].arguments, [data.fol_dechac, [8], tx]);
   assert.equal(detail.mock.calls[0].arguments[1].corr_dethac, 7);
   assert.equal(detail.mock.calls[1].arguments[1].corr_dethac, undefined);
@@ -260,7 +271,7 @@ test('editar preserva IDs y programas historicos sin cambios; agrega, modifica y
   assert.throws(() => service.actualizar('otro', data, '2'), /no se puede cambiar/);
 });
 
-test('editar no puede usar una cabecera legacy; cambiar origen exige programa activo', async () => {
+test('editar ProEmpleo busca su propia cabecera y cambiar origen exige un programa activo', async () => {
   mock.method(sequelize, 'transaction', async (callback) => callback({}));
   const obtener = mock.method(repo, 'obtener', async () => null);
   await assert.rejects(service.actualizar(entrada().fol_dechac, entrada(), '1'), (err) => err.statusCode === 404);
@@ -270,7 +281,7 @@ test('editar no puede usar una cabecera legacy; cambiar origen exige programa ac
   mock.method(repo, 'programaDisponible', async () => false);
   await assert.rejects(service.actualizar(entrada().fol_dechac, {
     ...entrada(), detalles: [{ ...entrada().detalles[0], corr_dethac: 1 }],
-  }, '1'), /no está activo/);
+  }, '1'), /debe estar activo/);
 });
 
 test('fallos de detalle o de respuesta propagan error y revierten toda la transaccion', async () => {
@@ -299,7 +310,7 @@ test('SQL de modificacion/eliminacion queda limitado al folio y detalle de tabla
   assert.match(query.mock.calls[2].arguments[0], /WHERE fol_dechac = :folio AND corr_dethac IN \(:ids\)/);
 });
 
-test('API autentica ADMIN/MINISTERIO, ofrece escrituras solo ProEmpleo y conserva consultas legacy', async () => {
+test('API autentica ADMIN/MINISTERIO, consulta ambos orígenes y solo escribe en ProEmpleo', async () => {
   const express = require('express');
   const auth = require('../src/middlewares/auth.middleware');
   mock.method(auth, 'requireAuth', (req, _res, next) => {
@@ -331,7 +342,7 @@ test('API autentica ADMIN/MINISTERIO, ofrece escrituras solo ProEmpleo y conserv
     }
     for (const role of ['ADMIN', 'MINISTERIO']) {
       const headers = { 'x-test-role': role, 'Content-Type': 'application/json' };
-      for (const path of ['', '/anios', '/programas', '/A10DH0025']) {
+      for (const path of ['', '/anios', '/programas?anio=2027', '/A10DH0025']) {
         assert.equal((await fetch(url + path, { headers })).status, 200);
       }
       assert.equal((await (await fetch(url + '/A10%20DH%2B25', { headers })).json()).fol_dechac, 'A10 DH+25');
@@ -340,6 +351,7 @@ test('API autentica ADMIN/MINISTERIO, ofrece escrituras solo ProEmpleo y conserv
       assert.equal((await fetch(url + '?anio=abc', { headers })).status, 400);
       assert.equal((await fetch(url, { method: 'POST', headers, body: JSON.stringify(entrada()) })).status, 201);
       assert.equal((await fetch(url + '/proempleo/A10DH0025', { method: 'PUT', headers, body: JSON.stringify(entrada()) })).status, 200);
+      assert.equal((await fetch(url + '/legacy/A10DH0025', { method: 'PUT', headers, body: JSON.stringify(entrada()) })).status, 404);
       assert.equal((await fetch(url + '/A10DH0025', { method: 'PUT', headers, body: JSON.stringify(entrada()) })).status, 404);
       assert.equal((await fetch(url, { method: 'POST', headers, body: JSON.stringify({ ...entrada(), mon_dechac: '1.5' }) })).status, 400);
       for (const method of ['PATCH', 'DELETE']) assert.equal((await fetch(url + '/A10DH0025', { method, headers })).status, 404);
@@ -348,7 +360,7 @@ test('API autentica ADMIN/MINISTERIO, ofrece escrituras solo ProEmpleo y conserv
     assert.equal(actualizar.mock.calls.length, 2);
     assert.equal(crear.mock.calls[0].arguments[1], '1');
     service.programas.mock.mockImplementation(async () => { throw Object.assign(new Error('Catalogo no disponible'), { statusCode: 503 }); });
-    assert.equal((await fetch(url + '/programas', { headers: { 'x-test-role': 'ADMIN' } })).status, 503);
+    assert.equal((await fetch(url + '/programas?anio=2027', { headers: { 'x-test-role': 'ADMIN' } })).status, 503);
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
