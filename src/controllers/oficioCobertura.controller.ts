@@ -45,7 +45,7 @@ export const oficioCoberturaController = {
   },
   async crearOrdinario(req: Request, res: Response) {
     const { body } = crearOrdinarioSchema.parse({ body: req.body });
-    res.status(201).json(await service.crearOrdinario(body.ord_ofi, body.cod_region, usuario(req)));
+    res.status(201).json(await service.crearOrdinario(body, usuario(req)));
   },
   async coberturas(req: Request, res: Response) {
     const { params } = folioOficioSchema.parse({ params: req.params });

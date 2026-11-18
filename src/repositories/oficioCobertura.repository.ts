@@ -3,7 +3,8 @@ import { sequelize } from '../database/sequelize';
 import type { OficioCobertura } from '../models/OficioCobertura.model';
 import type { OrdOficob } from '../models/OrdOficob.model';
 import type { OrigenMarco } from '../validations/marco.validation';
-import type { GuardarCoberturasInput, ListarOrdinariosQuery } from '../validations/oficioCobertura.validation';
+import { TIPO_COBERTURA } from '../validations/oficioCobertura.validation';
+import type { CrearOrdinarioInput, GuardarCoberturasInput, ListarOrdinariosQuery } from '../validations/oficioCobertura.validation';
 
 const LIMIT = 20;
 
@@ -20,7 +21,8 @@ export type CoberturaExistente = {
   cod_com: number; jor_ofi: string | null; tip_ofi: string | null; Mes_ofi: number | null; ano_ofi: number | null;
 };
 export type OrdinarioListado = OrdOficob & { origen: OrigenMarco; totalCoberturas: number; cod_region: number | null; nom_region: string | null };
-export type OrdinarioDetalle = OrdOficob & { origen: OrigenMarco; cod_region: number | null; nom_region: string | null };
+export type PeriodoOrdinario = { ano_ofi: number; mes_desde: number; mes_hasta: number };
+export type OrdinarioDetalle = OrdOficob & { [K in keyof PeriodoOrdinario]: number | null } & { origen: OrigenMarco; cod_region: number | null; nom_region: string | null };
 type Fila = OrdinarioListado & { total: number; totalPages: number; pagina: number; fila: number | null };
 
 export const oficioCoberturaRepository = {
@@ -112,9 +114,11 @@ export const oficioCoberturaRepository = {
 
   async buscarOrdinario(folio: string, transaction?: Transaction): Promise<OrdinarioDetalle | null> {
     const rows = await sequelize.query<OrdinarioDetalle>(`
-      SELECT u.ord_ofi, u.fec_ofi, u.usu_cre, u.fec_cre, u.origen, u.cod_region, r.Nom_region AS nom_region FROM (
-        SELECT RTRIM(ord_ofi) AS ord_ofi, fec_ofi, usu_cre, fec_cre, 'legacy' AS origen, CONVERT(INT, NULL) AS cod_region FROM dbo.ORDOFICOB
-        UNION ALL SELECT RTRIM(ord_ofi) AS ord_ofi, fec_ofi, usu_cre, fec_cre, 'proempleo' AS origen, cod_region FROM dbo.ordOficob_proempleo
+      SELECT u.ord_ofi, u.fec_ofi, u.usu_cre, u.fec_cre, u.origen, u.cod_region, u.ano_ofi, u.mes_desde, u.mes_hasta, r.Nom_region AS nom_region FROM (
+        SELECT RTRIM(ord_ofi) AS ord_ofi, fec_ofi, usu_cre, fec_cre, 'legacy' AS origen, CONVERT(INT, NULL) AS cod_region, NULL AS ano_ofi, NULL AS mes_desde, NULL AS mes_hasta
+        FROM dbo.ORDOFICOB WHERE ord_ofi = :folio
+        UNION ALL SELECT RTRIM(ord_ofi) AS ord_ofi, fec_ofi, usu_cre, fec_cre, 'proempleo' AS origen, cod_region, ano_ofi, mes_desde, mes_hasta
+        FROM dbo.ordOficob_proempleo ${transaction ? 'WITH (UPDLOCK, HOLDLOCK)' : ''} WHERE ord_ofi = :folio
       ) u LEFT JOIN dbo.REGIONES r ON r.cod_region = u.cod_region
       WHERE u.ord_ofi = :folio`,
     { type: QueryTypes.SELECT, replacements: { folio }, transaction });
@@ -128,11 +132,19 @@ export const oficioCoberturaRepository = {
     return (rows[0]?.total ?? 0) > 0;
   },
 
-  async crearOrdinario(folio: string, codRegion: number, usuario: string, transaction: Transaction) {
+  async crearOrdinario(data: CrearOrdinarioInput, usuario: string, transaction: Transaction) {
     await sequelize.query(`
-      INSERT INTO dbo.ordOficob_proempleo (ord_ofi, cod_region, fec_ofi, usu_cre, fec_cre)
-      VALUES (:folio, :codRegion, GETDATE(), :usuario, GETDATE())`,
-    { replacements: { folio, codRegion, usuario }, transaction });
+      INSERT INTO dbo.ordOficob_proempleo (ord_ofi, cod_region, ano_ofi, mes_desde, mes_hasta, fec_ofi, usu_cre, fec_cre)
+      VALUES (:ord_ofi, :cod_region, :ano_ofi, :mes_desde, :mes_hasta, GETDATE(), :usuario, GETDATE())`,
+    { replacements: { ...data, usuario }, transaction });
+  },
+
+  async fijarPeriodo(folio: string, periodo: PeriodoOrdinario, transaction: Transaction) {
+    await sequelize.query(`
+      UPDATE dbo.ordOficob_proempleo
+      SET ano_ofi = :ano_ofi, mes_desde = :mes_desde, mes_hasta = :mes_hasta
+      WHERE ord_ofi = :folio AND ano_ofi IS NULL`,
+    { replacements: { ...periodo, folio }, transaction });
   },
 
   coberturas(folio: string): Promise<CoberturaOficio[]> {
@@ -164,9 +176,9 @@ export const oficioCoberturaRepository = {
     { type: QueryTypes.SELECT, replacements: { folio }, transaction });
   },
 
-  async guardarCoberturas(folio: string, data: GuardarCoberturasInput, transaction: Transaction) {
+  async guardarCoberturas(folio: string, data: GuardarCoberturasInput, periodo: PeriodoOrdinario, transaction: Transaction) {
     for (const cobertura of data.coberturas) {
-      const meses = Array.from({ length: cobertura.mesHasta - cobertura.mesDesde + 1 }, (_, i) => cobertura.mesDesde + i);
+      const meses = Array.from({ length: periodo.mes_hasta - periodo.mes_desde + 1 }, (_, i) => periodo.mes_desde + i);
       for (const mes of meses) {
         await sequelize.query(`
           INSERT INTO dbo.oficiocob_proempleo
@@ -174,9 +186,9 @@ export const oficioCoberturaRepository = {
           VALUES
             (:folio, :corr_mar, :mes, :ano, :region, :ciudad, :comuna, :jornada, :tipo, :beneficiarios, 0)`, {
           replacements: {
-            folio, corr_mar: data.corr_mar, mes, ano: cobertura.ano_ofi,
+            folio, corr_mar: data.corr_mar, mes, ano: periodo.ano_ofi,
             region: cobertura.cod_reg, ciudad: cobertura.cod_ciu, comuna: cobertura.cod_com,
-            jornada: cobertura.jor_ofi, tipo: cobertura.tip_ofi, beneficiarios: cobertura.ben_ofi,
+            jornada: cobertura.jor_ofi, tipo: TIPO_COBERTURA, beneficiarios: cobertura.ben_ofi,
           },
           transaction,
         });
