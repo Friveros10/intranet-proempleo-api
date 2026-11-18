@@ -27,6 +27,7 @@ export interface BenProProempleo {
   sit_usu: string | null;
   dir_benpro: string | null;
   horario_benpro: string | null;
+  horario_benproJson: string | null;
   usu_mod: string | null;
   fec_mod: Date | null;
 }
@@ -59,6 +60,7 @@ export class BenProProempleoModel
   declare sit_usu: string | null;
   declare dir_benpro: string | null;
   declare horario_benpro: string | null;
+  declare horario_benproJson: string | null;
   declare usu_mod: string | null;
   declare fec_mod: Date | null;
 }
@@ -86,7 +88,8 @@ BenProProempleoModel.init(
     sit_fec: DataTypes.DATE,
     sit_usu: DataTypes.STRING,
     dir_benpro: DataTypes.STRING,
-    horario_benpro: DataTypes.STRING(200),
+    horario_benpro: DataTypes.STRING(255),
+    horario_benproJson: { type: 'NVARCHAR(MAX)', allowNull: true },
     usu_mod: DataTypes.STRING,
     fec_mod: DataTypes.DATE,
   },

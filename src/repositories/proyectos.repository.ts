@@ -1,14 +1,26 @@
 import { QueryTypes, Transaction } from "sequelize";
 import { sequelize } from "../database/sequelize";
 import type { OrigenMarco } from "../validations/marco.validation";
+import { horarioSemanalSchema } from "../validations/proyectos.validation";
 import type {
   GastoProyectoInput,
   GuardarProyectoInput,
+  HorarioSemanal,
   ListarProyectosQuery,
 } from "../validations/proyectos.validation";
 
 const LIMIT = 20;
 const BENEFICIARIOS_LIMIT = 10;
+
+function leerHorarioJson(json: string | null): HorarioSemanal | null {
+  if (!json) return null;
+  try {
+    const horario = horarioSemanalSchema.safeParse(JSON.parse(json));
+    return horario.success ? horario.data : null;
+  } catch {
+    return null;
+  }
+}
 
 const columnas = `p.fol_pro, RTRIM(p.nom_pro) AS nom_pro, p.rutint_pro, p.ruteje_pro, p.reg_pro, p.ciu_pro, p.com_pro,
   p.obj_pro, p.imp_pro, p.obs_pro, p.mes_pro, p.emp_pro, p.fecini_pro, p.fecter_pro, p.rutres_pro,
@@ -482,8 +494,9 @@ export const proyectosRepository = {
     folio: number,
     anio: number,
     mes: number,
-    page: number,
+    page: number | null,
     rut?: string,
+    transaction?: Transaction,
   ) {
     type FilaBeneficiario = {
       rut_ben: number | null;
@@ -495,6 +508,7 @@ export const proyectosRepository = {
       est_benpro: string | null;
       dir_benpro: string | null;
       horario_benpro: string | null;
+      horario_benproJson: string | null;
       asignacionOrigen: OrigenMarco | null;
       fila: number | null;
       total: number;
@@ -505,9 +519,11 @@ export const proyectosRepository = {
       `
       WITH asignacionesBase AS (
         SELECT fol_pro, ano_BenPro AS anio, mes_benpro AS mes, rut_ben, est_benpro, dir_benpro, com_ben,
-          CAST(NULL AS VARCHAR(200)) AS horario_benpro, 'legacy' AS asignacionOrigen FROM dbo.BENPRO
+          CAST(NULL AS VARCHAR(255)) AS horario_benpro, CAST(NULL AS NVARCHAR(MAX)) AS horario_benproJson,
+          'legacy' AS asignacionOrigen FROM dbo.BENPRO
         UNION ALL
-        SELECT fol_pro, ano_BenPro, mes_benpro, rut_ben, est_benpro, dir_benpro, com_ben, horario_benpro, 'proempleo' FROM dbo.benpro_proempleo
+        SELECT fol_pro, ano_BenPro, mes_benpro, rut_ben, est_benpro, dir_benpro, com_ben, horario_benpro,
+          horario_benproJson, 'proempleo' FROM dbo.benpro_proempleo
       ), asignaciones AS (
         SELECT *, ROW_NUMBER() OVER (
           PARTITION BY fol_pro, anio, mes, rut_ben
@@ -518,7 +534,7 @@ export const proyectosRepository = {
         FROM dbo.beneficiarios_consulta WHERE est_ben IS NULL OR RTRIM(est_ben) <> 'ELIMINADO'
       ), filtrados AS (
         SELECT a.rut_ben, b.dig_ben, b.nom_ben, b.pat_ben, b.mat_ben, c.nom_com AS nombreComuna,
-          a.dir_benpro, a.horario_benpro, a.est_benpro, a.asignacionOrigen
+          a.dir_benpro, a.horario_benpro, a.horario_benproJson, a.est_benpro, a.asignacionOrigen
         FROM asignaciones a LEFT JOIN beneficiarios b ON b.rut_ben = a.rut_ben AND b.prioridad = 1
         LEFT JOIN dbo.COMUNAS c ON c.cod_com = a.com_ben
         WHERE a.fol_pro = :folio AND a.anio = :anio AND a.mes = :mes
@@ -539,16 +555,20 @@ export const proyectosRepository = {
           folio,
           anio,
           mes,
-          pagina: page,
-          limite: BENEFICIARIOS_LIMIT,
+          pagina: page ?? 1,
+          limite: page === null ? 2147483647 : BENEFICIARIOS_LIMIT,
           rut: `%${(rut ?? "").replace(/[.\s]/g, "").toUpperCase()}%`,
         },
+        transaction,
       },
     );
     const meta = rows[0];
     const data = rows
       .filter((row) => row.fila !== null)
-      .map(({ fila, total, totalPages, pagina, ...row }) => row);
+      .map(({ fila, total, totalPages, pagina, ...row }) => ({
+        ...row,
+        horario_benproJson: leerHorarioJson(row.horario_benproJson),
+      }));
     return {
       data,
       pagination: {
@@ -653,8 +673,9 @@ export const proyectosRepository = {
     data: {
       anio: number;
       mes: number;
-      dir_benpro: string;
-      horario_benpro: string;
+      dir_benpro: string | null;
+      horario_benpro: string | null;
+      horario_benproJson: HorarioSemanal | null;
       com_ben: number | null;
     },
     usuario: string,
@@ -663,12 +684,12 @@ export const proyectosRepository = {
     await sequelize.query(
       `
       INSERT INTO dbo.benpro_proempleo
-        (ano_BenPro, mes_benpro, fol_pro, rut_ben, com_ben, cor_benpro, est_benpro, usu_cre, fec_cre, dir_benpro, horario_benpro)
+        (ano_BenPro, mes_benpro, fol_pro, rut_ben, com_ben, cor_benpro, est_benpro, usu_cre, fec_cre, dir_benpro, horario_benpro, horario_benproJson)
       SELECT :anio, :mes, :folio, :rut, :comuna,
         COALESCE((SELECT MAX(cor_benpro) FROM (
           SELECT cor_benpro FROM dbo.BENPRO WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
           UNION ALL SELECT cor_benpro FROM dbo.benpro_proempleo WHERE fol_pro=:folio AND ano_BenPro=:anio AND mes_benpro=:mes
-        ) correlativos), 0) + 1, 'ACTIVO', :usuario, GETDATE(), :direccion, :horario
+        ) correlativos), 0) + 1, 'ACTIVO', :usuario, GETDATE(), :direccion, :horario, :horarioJson
       FROM dbo.beneficiarios_consulta b WHERE b.rut_ben=:rut
       ORDER BY CASE b.origen WHEN 'proempleo' THEN 0 ELSE 1 END OFFSET 0 ROWS FETCH NEXT 1 ROW ONLY`,
       {
@@ -680,12 +701,36 @@ export const proyectosRepository = {
           mes: data.mes,
           direccion: data.dir_benpro,
           horario: data.horario_benpro,
+          horarioJson: data.horario_benproJson ? JSON.stringify(data.horario_benproJson) : null,
           comuna: data.com_ben,
           usuario,
         },
         transaction,
       },
     );
+  },
+
+  async actualizarHorarioBeneficiario(
+    folio: number, rut: number, periodo: { anio: number; mes: number },
+    data: { dir_benpro?: string; horario_benpro?: string; horario_benproJson?: HorarioSemanal },
+    usuario: string, transaction: Transaction,
+  ) {
+    const rows = await sequelize.query<{ id: number }>(`
+      UPDATE dbo.benpro_proempleo SET dir_benpro = COALESCE(:direccion, dir_benpro),
+        horario_benpro = COALESCE(:horario, horario_benpro),
+        horario_benproJson = COALESCE(:horarioJson, horario_benproJson),
+        usu_mod = :usuario, fec_mod = GETDATE()
+      OUTPUT INSERTED.id
+      WHERE fol_pro = :folio AND rut_ben = :rut AND ano_BenPro = :anio AND mes_benpro = :mes
+        AND (est_benpro IS NULL OR RTRIM(est_benpro) <> 'ELIMINADO')`, {
+      type: QueryTypes.SELECT,
+      replacements: {
+        folio, rut, ...periodo, usuario, direccion: data.dir_benpro ?? null, horario: data.horario_benpro ?? null,
+        horarioJson: data.horario_benproJson ? JSON.stringify(data.horario_benproJson) : null,
+      },
+      transaction,
+    });
+    return rows.length > 0;
   },
 
   async eliminarBeneficiario(

@@ -55,6 +55,14 @@ export const listarBeneficiariosProyectoSchema = z.object({
   }).default({}),
 });
 
+export const DIAS_HORARIO = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE'] as const;
+const hora = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, 'Ingresa una hora válida en formato HH:mm');
+export const horarioSemanalSchema = z.array(z.object({
+  dia: z.enum(DIAS_HORARIO), entrada: hora, salida: hora,
+}).strict()).min(1, 'Ingresa el horario de al menos un día').max(DIAS_HORARIO.length)
+  .refine((horario) => new Set(horario.map(({ dia }) => dia)).size === horario.length, 'Cada día puede tener un solo horario');
+export type HorarioSemanal = z.infer<typeof horarioSemanalSchema>;
+
 export const agregarBeneficiarioProyectoSchema = z.object({
   params: z.object({ folio: id }),
   body: z.object({
@@ -62,7 +70,7 @@ export const agregarBeneficiarioProyectoSchema = z.object({
     anio: z.number().int().min(1900).max(3000),
     mes: z.number().int().min(1).max(12),
     dir_benpro: z.string().trim().min(1, 'La dirección de trabajo es obligatoria').max(250),
-    horario_benpro: z.string().trim().min(1, 'El horario es obligatorio').max(200),
+    horario_benproJson: horarioSemanalSchema,
   }).strict(),
 });
 
@@ -82,6 +90,28 @@ export const eliminarBeneficiarioProyectoSchema = z.object({
     mes: z.coerce.number().int().min(1).max(12),
   }),
 });
+
+export const actualizarHorarioBeneficiarioSchema = eliminarBeneficiarioProyectoSchema.extend({
+  body: z.object({
+    dir_benpro: z.string().trim().min(1, 'La dirección de trabajo es obligatoria').max(250).optional(),
+    horario_benproJson: horarioSemanalSchema.optional(),
+  }).strict().refine((data) => data.dir_benpro !== undefined || data.horario_benproJson !== undefined, 'Ingresa una dirección de trabajo o un horario'),
+});
+
+const periodoVinculacion = buscarBeneficiarioProyectoSchema.shape.query.omit({ rut: true });
+export const previsualizarVinculacionSchema = z.object({ params: z.object({ folio: id }), query: periodoVinculacion });
+export const vincularBeneficiariosSchema = z.object({
+  params: z.object({ folio: id }),
+  body: periodoVinculacion.extend({
+    confirmarSinCambios: z.boolean().default(false),
+    beneficiarios: z.array(z.object({
+      rut: z.number().int().positive(),
+      dir_benpro: z.string().trim().min(1).max(250).optional(),
+      horario_benproJson: horarioSemanalSchema.optional(),
+    }).strict()).min(1).refine((filas) => new Set(filas.map((fila) => fila.rut)).size === filas.length, 'Hay beneficiarios repetidos'),
+  }).strict(),
+});
+export type VincularBeneficiariosInput = z.infer<typeof vincularBeneficiariosSchema>['body'];
 
 export const catalogoPorComunaSchema = z.object({
   query: z.object({ comuna: id.optional(), region: id.optional() }),

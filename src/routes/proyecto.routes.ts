@@ -15,6 +15,9 @@ import {
   obtenerProyectoSchema,
   listarBeneficiariosProyectoSchema,
   agregarBeneficiarioProyectoSchema,
+  actualizarHorarioBeneficiarioSchema,
+  previsualizarVinculacionSchema,
+  vincularBeneficiariosSchema,
   eliminarBeneficiarioProyectoSchema,
   buscarBeneficiarioProyectoSchema,
 } from '../validations/proyectos.validation';
@@ -58,6 +61,9 @@ router.get('/:folio/resumen', admin, validate(obtenerProyectoSchema), asyncHandl
 router.get('/:folio/beneficiarios', admin, validate(listarBeneficiariosProyectoSchema), asyncHandler(controller.beneficiarios));
 router.get('/:folio/beneficiarios/buscar', admin, validate(buscarBeneficiarioProyectoSchema), asyncHandler(controller.buscarBeneficiario));
 router.post('/:folio/beneficiarios', admin, validate(agregarBeneficiarioProyectoSchema), asyncHandler(controller.agregarBeneficiario));
+router.get('/:folio/beneficiarios/vincular-mes-anterior', admin, validate(previsualizarVinculacionSchema), asyncHandler(controller.previsualizarVinculacion));
+router.post('/:folio/beneficiarios/vincular-mes-anterior', admin, validate(vincularBeneficiariosSchema), asyncHandler(controller.vincularBeneficiarios));
+router.patch('/:folio/beneficiarios/:rut/horario', admin, validate(actualizarHorarioBeneficiarioSchema), asyncHandler(controller.actualizarHorarioBeneficiario));
 router.delete('/:folio/beneficiarios/:rut', admin, validate(eliminarBeneficiarioProyectoSchema), asyncHandler(controller.eliminarBeneficiario));
 router.get('/:folio/gastos', admin, validate(obtenerProyectoSchema), asyncHandler(controller.gastos));
 router.get('/:folio', admin, validate(obtenerProyectoSchema), asyncHandler(controller.obtener));

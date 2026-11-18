@@ -8,6 +8,9 @@ import {
   obtenerProyectoSchema,
   listarBeneficiariosProyectoSchema,
   agregarBeneficiarioProyectoSchema,
+  actualizarHorarioBeneficiarioSchema,
+  previsualizarVinculacionSchema,
+  vincularBeneficiariosSchema,
   eliminarBeneficiarioProyectoSchema,
   buscarBeneficiarioProyectoSchema,
 } from '../validations/proyectos.validation';
@@ -108,6 +111,18 @@ export const proyectosController = {
   async eliminarBeneficiario(req: Request, res: Response) {
     const { params, query } = eliminarBeneficiarioProyectoSchema.parse({ params: req.params, query: req.query });
     res.json(await service.eliminarBeneficiario(params.folio, params.rut, query, usuario(req)));
+  },
+  async actualizarHorarioBeneficiario(req: Request, res: Response) {
+    const { params, query, body } = actualizarHorarioBeneficiarioSchema.parse(req);
+    res.json(await service.actualizarHorarioBeneficiario(params.folio, params.rut, query, body, usuario(req)));
+  },
+  async previsualizarVinculacion(req: Request, res: Response) {
+    const { params, query } = previsualizarVinculacionSchema.parse(req);
+    res.json(await service.previsualizarVinculacion(params.folio, query));
+  },
+  async vincularBeneficiarios(req: Request, res: Response) {
+    const { params, body } = vincularBeneficiariosSchema.parse(req);
+    res.status(201).json(await service.vincularBeneficiarios(params.folio, body, usuario(req)));
   },
   async crear(req: Request, res: Response) {
     const { body } = guardarProyectoSchema.parse({ body: req.body });

@@ -1,7 +1,7 @@
 import { sequelize } from '../database/sequelize';
 import { coberturaProyectoService } from './coberturaProyecto.service';
 import { coberturaProyectoRepository } from '../repositories/coberturaProyecto.repository';
-import type { Transaction } from 'sequelize';
+import { Transaction } from 'sequelize';
 import { AppError } from '../utils/AppError';
 import { calcularDv, parseRut } from '../utils/rut';
 import { Banco_proyectos } from '../constants/BancoProyectos';
@@ -10,7 +10,31 @@ import { proyectosRepository as repository } from '../repositories/proyectos.rep
 import { regionRepository } from '../repositories/sicap/region.repository';
 import type { OrigenMarco } from '../validations/marco.validation';
 import type { GuardarResponsableInput } from '../validations/intermediarios.validation';
-import type { GuardarProyectoInput, ListarProyectosQuery } from '../validations/proyectos.validation';
+import { DIAS_HORARIO, type GuardarProyectoInput, type HorarioSemanal, type ListarProyectosQuery, type VincularBeneficiariosInput } from '../validations/proyectos.validation';
+
+function prepararHorario(horario: HorarioSemanal) {
+  const horario_benproJson = [...horario].sort((a, b) => DIAS_HORARIO.indexOf(a.dia) - DIAS_HORARIO.indexOf(b.dia));
+  const horario_benpro = horario_benproJson.map(({ dia, entrada, salida }) => `${dia} ${entrada} - ${salida}`).join('\n');
+  return { horario_benpro, horario_benproJson };
+}
+
+type PeriodoBeneficiarios = { anio: number; mes: number };
+
+function mesAnterior({ anio, mes }: PeriodoBeneficiarios) {
+  return mes === 1 ? { anio: anio - 1, mes: 12 } : { anio, mes: mes - 1 };
+}
+
+async function proyectoParaAsignar(folio: number, { anio, mes }: PeriodoBeneficiarios, transaction?: Transaction) {
+  const proyecto = await repository.obtener(folio, 'proempleo', transaction);
+  if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Solo se pueden modificar proyectos ProEmpleo activos', 404);
+  const periodo = `${anio}-${String(mes).padStart(2, '0')}`;
+  const inicio = proyecto.fecini_pro && new Date(proyecto.fecini_pro).toISOString().slice(0, 7);
+  const termino = proyecto.fecter_pro && new Date(proyecto.fecter_pro).toISOString().slice(0, 7);
+  if (!inicio || !termino || periodo < inicio || periodo > termino) {
+    throw new AppError('El período no está dentro del plazo del proyecto', 400);
+  }
+  return proyecto;
+}
 
 const DIAS_POR_MES = 30.4375;
 
@@ -231,25 +255,72 @@ export const proyectosService = {
     return { ...beneficiario, disponible: !asignado };
   },
 
-  async agregarBeneficiario(folio: number, data: { rut: string; anio: number; mes: number; dir_benpro: string; horario_benpro: string }, usuario: string) {
+  async agregarBeneficiario(folio: number, data: { rut: string; anio: number; mes: number; dir_benpro: string; horario_benproJson: HorarioSemanal }, usuario: string) {
     const rut = rutValidado(data.rut);
     return sequelize.transaction(async (transaction) => {
-      const proyecto = await repository.obtener(folio, 'proempleo', transaction);
-      if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Solo se pueden modificar proyectos ProEmpleo activos', 404);
+      const proyecto = await proyectoParaAsignar(folio, data, transaction);
       if (!await repository.existeBeneficiario(rut.cuerpo, transaction)) throw new AppError('El beneficiario no existe', 404);
-      const inicio = proyecto.fecini_pro ? new Date(proyecto.fecini_pro) : null;
-      const termino = proyecto.fecter_pro ? new Date(proyecto.fecter_pro) : null;
-      const periodo = new Date(Date.UTC(data.anio, data.mes - 1, 1));
-      const inicioMes = inicio ? new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth(), 1)) : null;
-      const terminoMes = termino ? new Date(Date.UTC(termino.getUTCFullYear(), termino.getUTCMonth(), 1)) : null;
-      if (!inicioMes || !terminoMes || periodo < inicioMes || periodo > terminoMes) {
-        throw new AppError('El período no está dentro del plazo del proyecto', 400);
-      }
       if (await repository.beneficiarioAsignado(rut.cuerpo, data.anio, data.mes, transaction)) {
         throw new AppError('El beneficiario ya está asignado a un proyecto en este período', 409);
       }
-      await repository.agregarBeneficiario(folio, rut.cuerpo, { ...data, com_ben: proyecto.com_pro }, usuario, transaction);
-      return { fol_pro: folio, rut_ben: rut.cuerpo, ...data };
+      const horario = prepararHorario(data.horario_benproJson);
+      await repository.agregarBeneficiario(folio, rut.cuerpo, { ...data, ...horario, com_ben: proyecto.com_pro }, usuario, transaction);
+      return { fol_pro: folio, rut_ben: rut.cuerpo, ...data, ...horario };
+    });
+  },
+
+  async previsualizarVinculacion(folio: number, periodo: PeriodoBeneficiarios) {
+    await proyectoParaAsignar(folio, periodo);
+    const anterior = mesAnterior(periodo);
+    const { data } = await repository.beneficiarios(folio, anterior.anio, anterior.mes, null);
+    return { periodo: anterior, beneficiarios: data };
+  },
+
+  async vincularBeneficiarios(folio: number, data: VincularBeneficiariosInput, usuario: string) {
+    return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      const proyecto = await proyectoParaAsignar(folio, data, transaction);
+      const anterior = mesAnterior(data);
+      const { data: originales } = await repository.beneficiarios(folio, anterior.anio, anterior.mes, null, undefined, transaction);
+      const porRut = new Map(originales.map((fila) => [fila.rut_ben, fila]));
+      let huboCambios = false;
+      const filas = data.beneficiarios.map((fila) => {
+        const original = porRut.get(fila.rut);
+        if (!original) throw new AppError(`El beneficiario ${fila.rut} ya no está en el mes anterior`, 409);
+        const horario = fila.horario_benproJson ? prepararHorario(fila.horario_benproJson) : {
+          horario_benpro: original.horario_benpro, horario_benproJson: original.horario_benproJson,
+        };
+        const dir_benpro = fila.dir_benpro ?? original.dir_benpro;
+        huboCambios ||= dir_benpro?.trim() !== original.dir_benpro?.trim()
+          || horario.horario_benpro !== original.horario_benpro;
+        return { rut: fila.rut, dir_benpro, ...horario };
+      });
+      if (!huboCambios && !data.confirmarSinCambios) {
+        throw new AppError('Confirma la vinculación sin modificar horario ni dirección de trabajo', 409);
+      }
+      for (const fila of filas) {
+        if (!await repository.existeBeneficiario(fila.rut, transaction)) {
+          throw new AppError(`El beneficiario ${fila.rut} ya no está disponible`, 409);
+        }
+        if (await repository.beneficiarioAsignado(fila.rut, data.anio, data.mes, transaction)) {
+          throw new AppError(`El beneficiario ${fila.rut} ya está asignado en el mes seleccionado. Quítalo de la lista para continuar.`, 409);
+        }
+        await repository.agregarBeneficiario(folio, fila.rut, {
+          ...fila, anio: data.anio, mes: data.mes, com_ben: proyecto.com_pro,
+        }, usuario, transaction);
+      }
+      return { total: filas.length };
+    });
+  },
+
+  async actualizarHorarioBeneficiario(folio: number, rut: number, periodo: { anio: number; mes: number }, data: { dir_benpro?: string; horario_benproJson?: HorarioSemanal }, usuario: string) {
+    return sequelize.transaction(async (transaction) => {
+      const proyecto = await repository.obtener(folio, 'proempleo', transaction);
+      if (!proyecto || proyecto.est_pro === 'ELIMINADO') throw new AppError('Solo se pueden modificar proyectos ProEmpleo activos', 404);
+      const datos = { dir_benpro: data.dir_benpro, ...(data.horario_benproJson && prepararHorario(data.horario_benproJson)) };
+      if (!await repository.actualizarHorarioBeneficiario(folio, rut, periodo, datos, usuario, transaction)) {
+        throw new AppError('La asignación ProEmpleo no fue encontrada', 404);
+      }
+      return datos;
     });
   },
 
