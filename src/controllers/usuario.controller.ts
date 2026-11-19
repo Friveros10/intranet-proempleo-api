@@ -17,6 +17,16 @@ export const usuarioController = {
     res.status(201).json(data);
   },
 
+  async desactivar(req: Request, res: Response): Promise<void> {
+    await usuarioService.desactivar(Number(req.params.rut));
+    res.status(204).end();
+  },
+
+  async resetearClave(req: Request, res: Response): Promise<void> {
+    await usuarioService.resetearClave(Number(req.params.rut));
+    res.status(204).end();
+  },
+
   async obtenerPerfil(req: Request, res: Response): Promise<void> {
     const data = await usuarioService.obtenerPerfil(Number(req.user!.sub));
     res.status(200).json(data);

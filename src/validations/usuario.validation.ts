@@ -6,6 +6,10 @@ export const listarUsuariosSchema = z.object({
   }),
 });
 
+export const usuarioPorRutSchema = z.object({
+  params: z.object({ rut: z.coerce.number().int().positive().max(2147483647) }),
+});
+
 export const crearUsuarioSchema = z.object({
   body: z.object({
     rut: z.string({ required_error: 'El RUT es requerido' }).min(2),

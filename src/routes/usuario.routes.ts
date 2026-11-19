@@ -3,7 +3,7 @@ import { usuarioController } from '../controllers/usuario.controller';
 import { requireAuth } from '../middlewares/auth.middleware';
 import { requireRoles } from '../middlewares/rbac.middleware';
 import { validate } from '../middlewares/validate.middleware';
-import { actualizarDatosPersonalesSchema, cambiarClaveSchema, crearUsuarioSchema, listarUsuariosSchema } from '../validations/usuario.validation';
+import { actualizarDatosPersonalesSchema, cambiarClaveSchema, crearUsuarioSchema, listarUsuariosSchema, usuarioPorRutSchema } from '../validations/usuario.validation';
 import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
@@ -19,5 +19,7 @@ router.put('/perfil/clave', validate(cambiarClaveSchema), asyncHandler(usuarioCo
 router.get('/', requireRoles('ADMIN'), validate(listarUsuariosSchema), asyncHandler(usuarioController.listar));
 router.post('/', requireRoles('ADMIN'), validate(crearUsuarioSchema), asyncHandler(usuarioController.crear));
 router.get('/catalogos/roles', requireRoles('ADMIN'), asyncHandler(usuarioController.listarRoles));
+router.delete('/:rut', requireRoles('ADMIN'), validate(usuarioPorRutSchema), asyncHandler(usuarioController.desactivar));
+router.put('/:rut/resetear-clave', requireRoles('ADMIN'), validate(usuarioPorRutSchema), asyncHandler(usuarioController.resetearClave));
 
 export default router;

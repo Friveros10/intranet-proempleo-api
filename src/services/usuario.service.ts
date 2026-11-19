@@ -6,7 +6,8 @@ import {
 } from "../models/UsuarioSicap.model";
 import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
-import { compararPasswordLegacy } from "../utils/password";
+import { compararClaveUsuario, hashClaveUsuario } from "../utils/password";
+import { loginAttemptsTracker } from "../utils/loginAttempts";
 import { CORR_ROL_VALIDOS, esCorrRolValido } from "../constants/roles";
 import { Op } from "sequelize";
 import {
@@ -68,6 +69,20 @@ function usuarioSeguro(usuario: UsuarioSicapModel) {
 export const usuarioService = {
   async listar(page = 1) {
     return usuarioSicapRepository.findAllPerfilesValidos(page);
+  },
+
+  async desactivar(rutUsuario: number) {
+    if (await usuarioSicapRepository.desactivar(rutUsuario)) return;
+    const usuario = await usuarioSicapRepository.findByRut(rutUsuario);
+    if (!usuario) throw new AppError("Usuario no encontrado", 404);
+    if (usuario.est_usu !== "INACTIVO") throw new AppError("Solo se puede desactivar un usuario activo", 409);
+  },
+
+  async resetearClave(rutUsuario: number) {
+    if (!await usuarioSicapRepository.cambiarClave(rutUsuario, "Proempleo.2027")) {
+      throw new AppError("Usuario no encontrado", 404);
+    }
+    loginAttemptsTracker.resetear(rutUsuario);
   },
 
   async listarRoles() {
@@ -156,7 +171,7 @@ export const usuarioService = {
       throw new AppError("Usuario no encontrado", 404);
     }
 
-    const claveValida = compararPasswordLegacy(
+    const claveValida = await compararClaveUsuario(
       data.claveActual,
       usuario.cla_usu,
     );
@@ -164,7 +179,9 @@ export const usuarioService = {
       throw new AppError("La contraseña actual no es correcta", 400);
     }
 
-    // Se conserva el formato de clave legacy en dbo.users_proempleo.
-    await usuarioSicapRepository.cambiarClave(rutUsuario, data.claveNueva);
+    const hash = await hashClaveUsuario(data.claveNueva);
+    if (!await usuarioSicapRepository.cambiarClave(rutUsuario, hash, usuario.cla_usu)) {
+      throw new AppError("La contraseña o el estado del usuario cambió. Intenta nuevamente.", 409);
+    }
   },
 };

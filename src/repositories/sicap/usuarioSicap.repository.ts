@@ -89,11 +89,25 @@ export const usuarioSicapRepository = {
     );
   },
 
-  async cambiarClave(rut_usu: number, cla_usu: string): Promise<void> {
-    await UsuarioSicapModel.update(
+  async cambiarClave(rut_usu: number, cla_usu: string, claveAnterior?: string): Promise<boolean> {
+    const [total] = await UsuarioSicapModel.update(
       { cla_usu, fec_mod: sequelize.fn('GETDATE') as unknown as Date },
-      { where: { rut_usu } },
+      { where: { rut_usu, ...(claveAnterior !== undefined && { cla_usu: claveAnterior, est_usu: 'ACTIVO' }) } },
     );
+    return total > 0;
+  },
+
+  async desactivar(rut_usu: number): Promise<boolean> {
+    const [total] = await UsuarioSicapModel.update(
+      { est_usu: 'INACTIVO', fec_mod: sequelize.fn('GETDATE') as unknown as Date },
+      { where: { rut_usu, est_usu: 'ACTIVO' } },
+    );
+    return total > 0;
+  },
+
+  async estaActivo(rut_usu: number): Promise<boolean> {
+    const usuario = await UsuarioSicapModel.findByPk(rut_usu, { attributes: ['est_usu'] });
+    return usuario?.est_usu === 'ACTIVO';
   },
 
   /** Permisos del usuario derivados de los menús habilitados para su rol (rol_menu + menus) */

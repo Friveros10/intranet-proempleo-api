@@ -1,6 +1,6 @@
 import { Request } from "express";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
-import { compararPasswordLegacy } from "../utils/password";
+import { compararClaveUsuario } from "../utils/password";
 import {
   signAccessToken,
   signRefreshToken,
@@ -54,7 +54,7 @@ export const authService = {
       throw new AppError("Usuario inactivo", 403);
     }
 
-    const passwordValida = compararPasswordLegacy(password, usuario.cla_usu);
+    const passwordValida = await compararClaveUsuario(password, usuario.cla_usu);
 
     if (!passwordValida) {
       loginAttemptsTracker.registrarFallo(rutUsu);
