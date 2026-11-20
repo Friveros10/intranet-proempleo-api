@@ -75,16 +75,31 @@ export const postergacionListadoRepository = {
   },
 
   async guardar(data: Postergacion, usuario: string) {
-    const rows = await sequelize.query<{ id: number }>(
+    const rows = await sequelize.transaction((transaction) => sequelize.query<{ id: number }>(
       `
+      DECLARE @ultimoLegacy int, @ultimoProempleo int, @nuevoId bigint;
+      SELECT @ultimoProempleo = MAX(id_benpropos)
+        FROM dbo.benpropos_proempleo WITH (TABLOCKX, HOLDLOCK);
+      SELECT @ultimoLegacy = MAX(id_benpropos) FROM dbo.BENPROPOS WITH (HOLDLOCK);
+      SELECT @nuevoId = COALESCE(MAX(CONVERT(bigint, id)), 0) + 1
+        FROM (VALUES (@ultimoLegacy), (@ultimoProempleo)) ids(id);
+
+      SET IDENTITY_INSERT dbo.benpropos_proempleo ON;
+      BEGIN TRY
         INSERT INTO dbo.benpropos_proempleo
-          (fol_dec, mes_benpropos, ano_benpropos, fec_benpropos, obs_benpropos, usu_cre, fec_cre, est_benpropos)
+          (id_benpropos, fol_dec, mes_benpropos, ano_benpropos, fec_benpropos, obs_benpropos, usu_cre, fec_cre, est_benpropos)
         OUTPUT INSERTED.id_benpropos AS id
-        SELECT :folio, :mes, :anio, CONVERT(date, :fecha, 23), :observacion, :usuario, GETDATE(), 'ACTIVO'
+        SELECT @nuevoId, :folio, :mes, :anio, CONVERT(date, :fecha, 23), :observacion, :usuario, GETDATE(), 'ACTIVO'
         WHERE EXISTS (SELECT 1 FROM (${vinculos}) d WHERE fol_dec = :folio AND ${activo});
+        SET IDENTITY_INSERT dbo.benpropos_proempleo OFF;
+      END TRY
+      BEGIN CATCH
+        SET IDENTITY_INSERT dbo.benpropos_proempleo OFF;
+        THROW;
+      END CATCH;
       `,
-      { replacements: { ...data, usuario }, type: QueryTypes.SELECT },
-    );
+      { replacements: { ...data, usuario }, type: QueryTypes.SELECT, transaction },
+    ));
     return rows[0];
   },
 
