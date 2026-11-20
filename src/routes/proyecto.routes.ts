@@ -1,12 +1,17 @@
-import { Router } from 'express';
-import { limitarRegionProyectos } from '../middlewares/proyectosRegion.middleware';
+import { Router } from "express";
+import { limitarRegionProyectos } from "../middlewares/proyectosRegion.middleware";
 
-import { proyectoController } from '../controllers/proyecto.controller';
-import { proyectosController as controller } from '../controllers/proyectos.controller';
-import { requireAuth } from '../middlewares/auth.middleware';
-import { requirePermisos, requireRoles } from '../middlewares/rbac.middleware';
-import { validate } from '../middlewares/validate.middleware';
-import { asyncHandler } from '../utils/asyncHandler';
+import { proyectoController } from "../controllers/proyecto.controller";
+import { proyectosController as controller } from "../controllers/proyectos.controller";
+import { requireAuth } from "../middlewares/auth.middleware";
+import { requirePermisos, requireRoles } from "../middlewares/rbac.middleware";
+import { validate } from "../middlewares/validate.middleware";
+import { asyncHandler } from "../utils/asyncHandler";
+import {
+  postergacionListadoRepository,
+  plazoOrdinario,
+} from "../repositories/postergacionListado.repository";
+import { AppError } from "../utils/AppError";
 import {
   catalogoPorComunaSchema,
   eliminarProyectoSchema,
@@ -20,12 +25,16 @@ import {
   vincularBeneficiariosSchema,
   eliminarBeneficiarioProyectoSchema,
   buscarBeneficiarioProyectoSchema,
-} from '../validations/proyectos.validation';
+  buscarPostergacionesSchema,
+  listarPostergacionesSchema,
+  guardarPostergacionSchema,
+  idPostergacionSchema,
+} from "../validations/proyectos.validation";
 import {
   ciudadesSchema,
   comunasSchema,
   guardarResponsableSchema,
-} from '../validations/intermediarios.validation';
+} from "../validations/intermediarios.validation";
 
 const router = Router();
 
@@ -33,39 +42,196 @@ router.use(requireAuth);
 
 // Consulta de cupos usada por el módulo de reemplazos (se mantiene sin cambios).
 router.get(
-  '/folio/:folio',
-  requirePermisos('REM_CREAR'),
+  "/folio/:folio",
+  requirePermisos("REM_CREAR"),
   asyncHandler(proyectoController.buscarPorFolio),
 );
 
 // Administración de proyectos (tabla paralela proyectos_proempleo), solo ADMIN/MINISTERIO.
-const admin = requireRoles('ADMIN', 'MINISTERIO', 'INTENDENCIA');
+const admin = requireRoles("ADMIN", "MINISTERIO", "INTENDENCIA");
 router.use(admin, asyncHandler(limitarRegionProyectos));
-router.get('/', admin, validate(listarProyectosSchema), asyncHandler(controller.listar));
-router.get('/banco', admin, asyncHandler(controller.banco));
-router.get('/detalle-gastos', admin, asyncHandler(controller.detalleGastos));
-router.get('/anios', admin, asyncHandler(controller.anios));
-router.get('/filtros', admin, validate(listarProyectosSchema), asyncHandler(controller.opcionesFiltros));
-router.get('/regiones', admin, asyncHandler(controller.regiones));
-router.get('/ciudades', admin, validate(ciudadesSchema), asyncHandler(controller.ciudades));
-router.get('/comunas', admin, validate(comunasSchema), asyncHandler(controller.comunas));
-router.get('/intermediarios', admin, validate(catalogoPorComunaSchema), asyncHandler(controller.intermediarios));
-router.get('/ejecutores', admin, validate(catalogoPorComunaSchema), asyncHandler(controller.ejecutores));
-router.get('/responsables', admin, validate(catalogoPorComunaSchema), asyncHandler(controller.responsables));
-router.post('/responsables', admin, validate(guardarResponsableSchema), asyncHandler(controller.crearResponsable));
-router.get('/proximo-folio', admin, asyncHandler(controller.proximoFolio));
-router.post('/', admin, validate(guardarProyectoSchema), asyncHandler(controller.crear));
-router.put('/proempleo/:folio', admin, validate(obtenerProyectoSchema), validate(guardarProyectoSchema), asyncHandler(controller.actualizar));
-router.delete('/proempleo/:folio', requireRoles('ADMIN'), validate(eliminarProyectoSchema), asyncHandler(controller.eliminar));
-router.get('/:folio/resumen', admin, validate(obtenerProyectoSchema), asyncHandler(controller.resumen));
-router.get('/:folio/beneficiarios', admin, validate(listarBeneficiariosProyectoSchema), asyncHandler(controller.beneficiarios));
-router.get('/:folio/beneficiarios/buscar', admin, validate(buscarBeneficiarioProyectoSchema), asyncHandler(controller.buscarBeneficiario));
-router.post('/:folio/beneficiarios', admin, validate(agregarBeneficiarioProyectoSchema), asyncHandler(controller.agregarBeneficiario));
-router.get('/:folio/beneficiarios/vincular-mes-anterior', admin, validate(previsualizarVinculacionSchema), asyncHandler(controller.previsualizarVinculacion));
-router.post('/:folio/beneficiarios/vincular-mes-anterior', admin, validate(vincularBeneficiariosSchema), asyncHandler(controller.vincularBeneficiarios));
-router.patch('/:folio/beneficiarios/:rut/horario', admin, validate(actualizarHorarioBeneficiarioSchema), asyncHandler(controller.actualizarHorarioBeneficiario));
-router.delete('/:folio/beneficiarios/:rut', admin, validate(eliminarBeneficiarioProyectoSchema), asyncHandler(controller.eliminarBeneficiario));
-router.get('/:folio/gastos', admin, validate(obtenerProyectoSchema), asyncHandler(controller.gastos));
-router.get('/:folio', admin, validate(obtenerProyectoSchema), asyncHandler(controller.obtener));
+const administrarPostergaciones = requireRoles("ADMIN", "MINISTERIO");
+router.get(
+  "/postergaciones/decretos",
+  administrarPostergaciones,
+  asyncHandler(async (req, res) => {
+    const { folio } = buscarPostergacionesSchema.parse(req.query);
+    res.json(await postergacionListadoRepository.buscarDecreto(folio));
+  }),
+);
+router.get(
+  "/postergaciones",
+  administrarPostergaciones,
+  asyncHandler(async (req, res) => {
+    const { folio, page } = listarPostergacionesSchema.parse(req.query);
+    res.json(await postergacionListadoRepository.listar(page, folio));
+  }),
+);
+router.post(
+  "/postergaciones",
+  administrarPostergaciones,
+  asyncHandler(async (req, res) => {
+    const datos = guardarPostergacionSchema.parse(req.body);
+    if (datos.fecha <= plazoOrdinario(datos.anio, datos.mes)) {
+      throw new AppError(
+        "La fecha debe ser posterior al día 15 del mes siguiente al período de ejecución",
+        400,
+      );
+    }
+    const registro = await postergacionListadoRepository.guardar(
+      datos,
+      req.user!.sub,
+    );
+    if (!registro)
+      throw new AppError("El decreto debe estar vinculado a un proyecto", 404);
+    res.status(201).json(registro);
+  }),
+);
+router.delete(
+  "/postergaciones/:id",
+  administrarPostergaciones,
+  asyncHandler(async (req, res) => {
+    const { id } = idPostergacionSchema.parse(req.params);
+    const registro = await postergacionListadoRepository.anular(
+      id,
+      req.user!.sub,
+    );
+    if (!registro)
+      throw new AppError("Postergación ProEmpleo activa no encontrada", 404);
+    res.json(registro);
+  }),
+);
+router.get(
+  "/",
+  admin,
+  validate(listarProyectosSchema),
+  asyncHandler(controller.listar),
+);
+router.get("/banco", admin, asyncHandler(controller.banco));
+router.get("/detalle-gastos", admin, asyncHandler(controller.detalleGastos));
+router.get("/anios", admin, asyncHandler(controller.anios));
+router.get(
+  "/filtros",
+  admin,
+  validate(listarProyectosSchema),
+  asyncHandler(controller.opcionesFiltros),
+);
+router.get("/regiones", admin, asyncHandler(controller.regiones));
+router.get(
+  "/ciudades",
+  admin,
+  validate(ciudadesSchema),
+  asyncHandler(controller.ciudades),
+);
+router.get(
+  "/comunas",
+  admin,
+  validate(comunasSchema),
+  asyncHandler(controller.comunas),
+);
+router.get(
+  "/intermediarios",
+  admin,
+  validate(catalogoPorComunaSchema),
+  asyncHandler(controller.intermediarios),
+);
+router.get(
+  "/ejecutores",
+  admin,
+  validate(catalogoPorComunaSchema),
+  asyncHandler(controller.ejecutores),
+);
+router.get(
+  "/responsables",
+  admin,
+  validate(catalogoPorComunaSchema),
+  asyncHandler(controller.responsables),
+);
+router.post(
+  "/responsables",
+  admin,
+  validate(guardarResponsableSchema),
+  asyncHandler(controller.crearResponsable),
+);
+router.get("/proximo-folio", admin, asyncHandler(controller.proximoFolio));
+router.post(
+  "/",
+  admin,
+  validate(guardarProyectoSchema),
+  asyncHandler(controller.crear),
+);
+router.put(
+  "/proempleo/:folio",
+  admin,
+  validate(obtenerProyectoSchema),
+  validate(guardarProyectoSchema),
+  asyncHandler(controller.actualizar),
+);
+router.delete(
+  "/proempleo/:folio",
+  requireRoles("ADMIN"),
+  validate(eliminarProyectoSchema),
+  asyncHandler(controller.eliminar),
+);
+router.get(
+  "/:folio/resumen",
+  admin,
+  validate(obtenerProyectoSchema),
+  asyncHandler(controller.resumen),
+);
+router.get(
+  "/:folio/beneficiarios",
+  admin,
+  validate(listarBeneficiariosProyectoSchema),
+  asyncHandler(controller.beneficiarios),
+);
+router.get(
+  "/:folio/beneficiarios/buscar",
+  admin,
+  validate(buscarBeneficiarioProyectoSchema),
+  asyncHandler(controller.buscarBeneficiario),
+);
+router.post(
+  "/:folio/beneficiarios",
+  admin,
+  validate(agregarBeneficiarioProyectoSchema),
+  asyncHandler(controller.agregarBeneficiario),
+);
+router.get(
+  "/:folio/beneficiarios/vincular-mes-anterior",
+  admin,
+  validate(previsualizarVinculacionSchema),
+  asyncHandler(controller.previsualizarVinculacion),
+);
+router.post(
+  "/:folio/beneficiarios/vincular-mes-anterior",
+  admin,
+  validate(vincularBeneficiariosSchema),
+  asyncHandler(controller.vincularBeneficiarios),
+);
+router.patch(
+  "/:folio/beneficiarios/:rut/horario",
+  admin,
+  validate(actualizarHorarioBeneficiarioSchema),
+  asyncHandler(controller.actualizarHorarioBeneficiario),
+);
+router.delete(
+  "/:folio/beneficiarios/:rut",
+  admin,
+  validate(eliminarBeneficiarioProyectoSchema),
+  asyncHandler(controller.eliminarBeneficiario),
+);
+router.get(
+  "/:folio/gastos",
+  admin,
+  validate(obtenerProyectoSchema),
+  asyncHandler(controller.gastos),
+);
+router.get(
+  "/:folio",
+  admin,
+  validate(obtenerProyectoSchema),
+  asyncHandler(controller.obtener),
+);
 
 export default router;

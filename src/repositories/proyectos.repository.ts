@@ -771,6 +771,7 @@ export const proyectosRepository = {
     anio: number,
     mes: number,
     usuario: string,
+    transaction?: Transaction,
   ): Promise<boolean> {
     const rows = await sequelize.query<{ id: number }>(
       `
@@ -780,6 +781,7 @@ export const proyectosRepository = {
       {
         type: QueryTypes.SELECT,
         replacements: { folio, rut, anio, mes, usuario },
+        transaction,
       },
     );
     return rows.length > 0;
