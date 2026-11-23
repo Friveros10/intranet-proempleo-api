@@ -27,7 +27,10 @@ export const nuevoBeneficiarioSchema = z.object({
 
 // La solicitud llega como multipart/form-data (incluye los PDF adjuntos), por lo
 // que los campos anidados viajan como JSON serializado dentro de strings.
-export function jsonField<T extends z.ZodTypeAny>(schema: T, mensajeInvalido: string) {
+export function jsonField<T extends z.ZodTypeAny>(
+  schema: T,
+  mensajeInvalido: string,
+) {
   return z
     .string()
     .transform((valor, ctx) => {
@@ -42,41 +45,43 @@ export function jsonField<T extends z.ZodTypeAny>(schema: T, mensajeInvalido: st
 }
 
 export const crearReemplazoSchema = z.object({
-  body: z.object({
-    cupoCobertura: z.preprocess(
-      (valor) =>
-        valor === "true" ? true : valor === "false" ? false : valor,
-      z.boolean(),
-    ),
-    idBeneficiarioProyecto: z.coerce.number().int().positive().optional(),
-    idProyecto: z.coerce
-      .number({ required_error: "idProyecto es requerido" })
-      .int()
-      .positive(),
-    nuevosBeneficiarios: jsonField(
-      z
-        .array(nuevoBeneficiarioSchema)
-        .length(3, "Se deben ingresar exactamente tres beneficiarios nuevos"),
-      "nuevosBeneficiarios inválido",
-    ),
-    documentos: jsonField(
-      z.array(
-        z.object({
-          rut: z.string().min(2),
-          idDocumento: z.coerce.number().int(),
-        }),
+  body: z
+    .object({
+      cupoCobertura: z.preprocess(
+        (valor) =>
+          valor === "true" ? true : valor === "false" ? false : valor,
+        z.boolean(),
       ),
-      "documentos inválido",
-    ),
-  }).superRefine((data, ctx) => {
-    if (!data.cupoCobertura && data.idBeneficiarioProyecto === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["idBeneficiarioProyecto"],
-        message: "idBeneficiarioProyecto es requerido",
-      });
-    }
-  }),
+      idBeneficiarioProyecto: z.coerce.number().int().positive().optional(),
+      idProyecto: z.coerce
+        .number({ required_error: "idProyecto es requerido" })
+        .int()
+        .positive(),
+      nuevosBeneficiarios: jsonField(
+        z
+          .array(nuevoBeneficiarioSchema)
+          .length(3, "Se deben ingresar exactamente tres beneficiarios nuevos"),
+        "nuevosBeneficiarios inválido",
+      ),
+      documentos: jsonField(
+        z.array(
+          z.object({
+            rut: z.string().min(2),
+            idDocumento: z.coerce.number().int(),
+          }),
+        ),
+        "documentos inválido",
+      ),
+    })
+    .superRefine((data, ctx) => {
+      if (!data.cupoCobertura && data.idBeneficiarioProyecto === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["idBeneficiarioProyecto"],
+          message: "idBeneficiarioProyecto es requerido",
+        });
+      }
+    }),
 });
 
 export const actualizarEstadoReemplazoSchema = z.object({
@@ -142,7 +147,9 @@ const checklistCandidatoSchema = z.object({
 export const actualizarChecklistReemplazoSchema = z.object({
   body: z.object({
     ganadorId: z.number().int().positive().optional(),
-    desempate: z.enum(["Edad", "proyecto", "Tiempo Cesante"]).optional(),
+    desempate: z
+      .enum(["Edad", "proyecto", "Tiempo de Cesantía", "Sexo"])
+      .optional(),
     candidatos: z
       .array(checklistCandidatoSchema)
       .min(1, "Debe evaluar al menos un candidato")
@@ -163,7 +170,14 @@ export const listarReemplazoSchema = z.object({
     fechaDesde: z.string().min(1).optional(),
     fechaHasta: z.string().min(1).optional(),
     status: z
-      .enum(["pendiente", "preAprobado", "aprobado", "rechazado", "enRevision", "revisado"])
+      .enum([
+        "pendiente",
+        "preAprobado",
+        "aprobado",
+        "rechazado",
+        "enRevision",
+        "revisado",
+      ])
       .optional(),
   }),
 });
