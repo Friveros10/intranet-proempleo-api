@@ -2,7 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 // Continuación de dbo.PROYECTOS: mismas columnas con los tipos reales de SQL
-// Server, más banco_pro (referencia al catálogo estático Banco_proyectos,
+// Server, más banco_pro (referencia al banco de proyectos ProEmpleo,
 // diferencia aprobada). Aquí se crean, editan y eliminan (lógico) los proyectos
 // nuevos; la tabla original permanece de solo lectura.
 export interface ProyectoProempleo {

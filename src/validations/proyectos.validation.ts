@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { Banco_proyectos } from "../constants/BancoProyectos";
 import { DetalleDeGastos } from "../constants/DetalleDeGastos";
 
 const id = z.coerce.number().int().positive().max(2147483647);
@@ -250,13 +249,7 @@ export const guardarProyectoSchema = z.object({
   body: z
     .object({
       fol_pro: z.number().int().positive().max(2147483647),
-      banco_pro: z
-        .number()
-        .int()
-        .refine(
-          (valor) => Banco_proyectos.some((banco) => banco.id === valor),
-          "El banco de proyectos no es válido",
-        ),
+      banco_pro: z.number().int().positive().max(2147483647),
       ano_pro: z.number().int().min(1900).max(3000),
       rutint_pro: z.number().int().positive().max(2147483647),
       ruteje_pro: z.number().int().positive().max(2147483647),

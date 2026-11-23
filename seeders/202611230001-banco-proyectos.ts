@@ -1,5 +1,6 @@
-/** Catálogo estático de documentos requeridos para un reemplazo de beneficiario en proyecto */
-export const Banco_proyectos = [
+import { sequelize } from "../src/database/sequelize";
+
+const proyectosIniciales = [
   {
     id: 1,
     nombre_proyecto: "Mantención de áreas verdes, plazas y bandejones",
@@ -153,8 +154,45 @@ export const Banco_proyectos = [
   },
 ] as const;
 
-export type BancoProyectosID = (typeof Banco_proyectos)[number]["id"];
+async function seed(): Promise<void> {
+  const bind: Record<string, number | string> = {};
+  const filas = proyectosIniciales.map(
+    ({ id, nombre_proyecto, alcance, categoria }) => {
+      bind[`id${id}`] = id;
+      bind[`nombre${id}`] = nombre_proyecto;
+      bind[`alcance${id}`] = alcance;
+      bind[`categoria${id}`] = categoria;
+      return `($id${id}, $nombre${id}, $alcance${id}, $categoria${id})`;
+    },
+  );
 
-export function esDocumentoReemplazoValido(id: number): id is BancoProyectosID {
-  return Banco_proyectos.some((d) => d.id === id);
+  await sequelize.transaction(async (transaction) => {
+    // Tedious ejecuta las consultas parametrizadas mediante sp_executesql.
+    // IDENTITY_INSERT debe estar activo dentro de esa misma ejecución.
+    await sequelize.query(
+      `SET IDENTITY_INSERT dbo.banco_proyectos_proempleo ON;
+       BEGIN TRY
+         INSERT INTO dbo.banco_proyectos_proempleo (id, nombre_proyecto, alcance, categoria)
+         SELECT fuente.id, fuente.nombre_proyecto, fuente.alcance, fuente.categoria
+         FROM (VALUES ${filas.join(",\n")}) AS fuente (id, nombre_proyecto, alcance, categoria)
+         WHERE NOT EXISTS (
+           SELECT 1 FROM dbo.banco_proyectos_proempleo AS existente WITH (UPDLOCK, HOLDLOCK)
+           WHERE existente.id = fuente.id
+         );
+       END TRY
+       BEGIN CATCH
+         SET IDENTITY_INSERT dbo.banco_proyectos_proempleo OFF;
+         THROW;
+       END CATCH;
+       SET IDENTITY_INSERT dbo.banco_proyectos_proempleo OFF;`,
+      { bind, transaction },
+    );
+  });
 }
+
+seed()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => sequelize.close());
