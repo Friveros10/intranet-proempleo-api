@@ -21,6 +21,7 @@ import intermediariosRoutes from './intermediarios.routes';
 import ejecutoresRoutes from './ejecutores.routes';
 import condocRoutes from './condoc.routes';
 import oficioCoberturaRoutes from './oficioCobertura.routes';
+import ordinariosRoutes from './ordinarios.routes';
 
 const router = Router();
 router.use('/encuesta', encuestaRoutes);
@@ -43,6 +44,7 @@ router.use('/intermediarios', intermediariosRoutes);
 router.use('/ejecutores', ejecutoresRoutes);
 router.use('/condoc', condocRoutes);
 router.use('/oficio-cobertura', oficioCoberturaRoutes);
+router.use('/ordinarios', ordinariosRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);
