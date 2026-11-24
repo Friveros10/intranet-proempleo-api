@@ -17,15 +17,20 @@ export const proyectosTransferenciaSchema = z.object({
   params: paramsDecreto,
   query: filtrosTabla.omit({ anio: true, mes: true }),
 });
-export const listarTransferenciasSchema = z.object({ params: paramsOrdinario, query: filtrosTabla });
+export const listarTransferenciasSchema = z.object({
+  params: paramsOrdinario,
+  query: filtrosTabla.extend({ decreto: folioDecreto.optional() }),
+});
 export const registrarTransferenciaSchema = z.object({
   params: paramsOrdinario,
   body: z.object({
     decreto: folioDecreto,
     folio: z.number().int().positive().max(2147483647),
     monto: z.string().regex(/^[1-9]\d{0,17}$/, 'Ingresa un monto positivo en pesos enteros.'),
+    observaciones: z.string().trim().max(250, 'Las observaciones admiten hasta 250 caracteres.').optional(),
   }).strict(),
 });
 
 export type FiltrosTransferencias = z.infer<typeof filtrosTabla>;
+export type ListarTransferenciasQuery = z.infer<typeof listarTransferenciasSchema>['query'];
 export type RegistrarTransferenciaInput = z.infer<typeof registrarTransferenciaSchema>['body'];

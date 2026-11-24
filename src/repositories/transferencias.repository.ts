@@ -4,6 +4,7 @@ import { TransferenciasModel } from "../models/Transferencias.model";
 import { TransferenciasProempleoModel } from "../models/TransferenciasProempleo.model";
 import type {
   FiltrosTransferencias,
+  ListarTransferenciasQuery,
   RegistrarTransferenciaInput,
 } from "../validations/transferencias.validation";
 import { ordinariosUnificados } from "./ordinarios.repository";
@@ -81,7 +82,8 @@ const baseTransferencias = `
       SELECT t.*, COALESCE(t.fec_trans, o.fecha_pago) fechaEfectiva
       FROM transferencias t
       LEFT JOIN ordinarios o ON o.ordinario = t.ordinario
-      WHERE t.ordinario = :ordinario AND ISNULL(t.estado, '') <> 'ELIMINADO'
+      WHERE t.ordinario = :ordinario AND (:decreto IS NULL OR t.fol_dec = :decreto)
+        AND ISNULL(t.estado, '') <> 'ELIMINADO'
     ), totales AS (
       SELECT t.folio, SUM(CAST(t.monto AS DECIMAL(38,0))) transferido
       FROM transferencias t
@@ -219,12 +221,12 @@ export const transferenciasRepository = {
     });
   },
 
-  realizadas(ordinario: string, filtros: FiltrosTransferencias) {
+  realizadas(ordinario: string, filtros: ListarTransferenciasQuery) {
     return paginar<TransferenciaListado>(
       baseTransferencias,
       "fecha DESC, folio, correlativo DESC, origen, decreto",
       filtros,
-      { ordinario },
+      { ordinario, decreto: filtros.decreto ?? null },
     );
   },
 
@@ -273,12 +275,12 @@ export const transferenciasRepository = {
       `
       WITH transferencias AS (${transferencias})
       INSERT INTO ${tablaNueva}
-        (ordinario, folio, correlativo, monto, estado, ingreso, ultimo_usuario, ultima_actualizacion, fec_trans, fol_dec)
+        (ordinario, folio, correlativo, monto, estado, ingreso, ultimo_usuario, ultima_actualizacion, fec_trans, fol_dec, observaciones)
       SELECT :ordinario, :folio, ISNULL(MAX(CONVERT(INT, correlativo)), 0) + 1, :monto,
-        'VIGENTE', GETDATE(), :usuario, GETDATE(), CONVERT(DATE, :fechaPago, 23), :decreto
+        'VIGENTE', GETDATE(), :usuario, GETDATE(), CONVERT(DATE, :fechaPago, 23), :decreto, :observaciones
       FROM transferencias WHERE ordinario = :ordinario AND folio = :folio
     `,
-      { replacements: { ...data, ordinario, usuario, fechaPago }, transaction },
+      { replacements: { ...data, ordinario, usuario, fechaPago, observaciones: data.observaciones || null }, transaction },
     );
   },
 };

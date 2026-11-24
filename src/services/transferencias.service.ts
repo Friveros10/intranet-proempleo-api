@@ -3,7 +3,7 @@ import { sequelize } from '../database/sequelize';
 import { ordinariosRepository } from '../repositories/ordinarios.repository';
 import { transferenciasRepository as repository } from '../repositories/transferencias.repository';
 import { AppError } from '../utils/AppError';
-import type { FiltrosTransferencias, RegistrarTransferenciaInput } from '../validations/transferencias.validation';
+import type { FiltrosTransferencias, ListarTransferenciasQuery, RegistrarTransferenciaInput } from '../validations/transferencias.validation';
 
 async function buscarDecreto(decreto: string, transaction?: Transaction) {
   const [encontrado] = await repository.buscarDecreto(decreto, transaction);
@@ -18,7 +18,7 @@ export const transferenciasService = {
     return repository.proyectos(decreto, filtros);
   },
 
-  listar(ordinario: string, filtros: FiltrosTransferencias) {
+  listar(ordinario: string, filtros: ListarTransferenciasQuery) {
     return repository.realizadas(ordinario, filtros);
   },
 
