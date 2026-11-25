@@ -937,7 +937,7 @@ export const proyectosRepository = {
     await sequelize.query(
       `
       DELETE FROM dbo.detrendicion_proempleo
-      WHERE fol_pro = :folio AND glo_detren = 'FICHA_PROYECTO'`,
+      WHERE fol_pro = :folio AND fol_dec = '00000000' AND glo_detren = 'FICHA_PROYECTO'`,
       {
         type: QueryTypes.DELETE,
         replacements: { folio },
