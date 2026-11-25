@@ -27,6 +27,7 @@ type GastoListado = {
   factura: string | null;
   egreso: string | null;
   glosa: string | null;
+  fecfac_detren: string | null;
   region: number | null;
   nombreRegion: string | null;
   origen: "legacy" | "proempleo";
@@ -48,12 +49,13 @@ export const detalleGastosRepository = {
     >(
       `
       WITH gastos AS (
-        SELECT ${columnas}, 'legacy' origen FROM dbo.${DetRendicionModel.tableName}
-        UNION ALL SELECT ${columnas}, 'proempleo' FROM ${tablaNueva}
+        SELECT ${columnas}, fecfac_detren, 'legacy' origen FROM dbo.${DetRendicionModel.tableName}
+        UNION ALL SELECT ${columnas}, fecfac_detren, 'proempleo' FROM ${tablaNueva}
       ), filtrados AS (
         SELECT corr_detren correlativo, fol_pro folio, corr_itemgas item, RTRIM(che_detren) cheque,
           CONVERT(VARCHAR(40), fac_detren) factura, RTRIM(egr_detren) egreso,
           CONVERT(VARCHAR(40), mon_detren) monto, RTRIM(glo_detren) glosa, cod_region region, origen,
+          CONVERT(CHAR(10), fecfac_detren, 23) fecfac_detren,
           ROW_NUMBER() OVER (ORDER BY corr_detren DESC, origen) fila
         FROM gastos WHERE fol_dec = :decreto AND ano_detren = :anio AND mes_detren = :mes
           AND ISNULL(est_detren, '') <> 'ELIMINADO'
@@ -170,12 +172,17 @@ export const detalleGastosRepository = {
   },
 
   async cambiar(id: number, data: EditarDetalleGastoInput | null, usuario: string, transaction: Transaction) {
+    const cambiarFecha = data?.fecfac_detren !== undefined;
     await sequelize.query(`
       UPDATE ${tablaNueva}
       SET usu_mod = :usuario, ${data ? 'mon_detren = :monto, glo_detren = :glosa' : "est_detren = 'ELIMINADO', fec_eli = GETDATE()"}
+        ${cambiarFecha ? ", fecfac_detren = CONVERT(DATE, :fecfac_detren, 23)" : ""}
       WHERE corr_detren = :id
     `, {
-      replacements: { id, usuario, ...(data && { monto: data.monto, glosa: data.glosa || null }) }, transaction,
+      replacements: {
+        id, usuario, ...(data && { monto: data.monto, glosa: data.glosa || null }),
+        ...(cambiarFecha && { fecfac_detren: data?.fecfac_detren }),
+      }, transaction,
     });
     return { correlativo: id };
   },
@@ -201,15 +208,16 @@ export const detalleGastosRepository = {
       `
       INSERT INTO ${tablaNueva} (mes_detren, ano_detren, fol_dec, fol_pro, mon_detren,
         che_detren, fac_detren, usu_cre, fec_cre, est_detren, corr_itemgas, egr_detren,
-        glo_detren, cod_region, EstApr_detren)
+        glo_detren, cod_region, EstApr_detren, fecfac_detren)
       OUTPUT INSERTED.corr_detren correlativo
       VALUES (:mes, :anio, :decreto, :folio, :monto, '1', 1, :usuario, GETDATE(),
-        'ACTIVO', :item, '1', :glosa, :region, :marca)
+        'ACTIVO', :item, '1', :glosa, :region, :marca, CONVERT(DATE, :fecfac_detren, 23))
     `,
       {
         type: QueryTypes.SELECT,
         replacements: {
           ...data, glosa: data.glosa || null, region: proyecto.region, usuario, marca: marcaAsiento,
+          fecfac_detren: data.fecfac_detren ?? null,
         },
         transaction,
       },

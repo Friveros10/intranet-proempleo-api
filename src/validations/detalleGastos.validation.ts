@@ -35,6 +35,10 @@ export const crearDetalleGastoSchema = z.object({
           "Ingresa un monto positivo en pesos enteros.",
         ),
       glosa: z.string().trim().max(200).optional(),
+      fecfac_detren: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((valor) => {
+        const fecha = new Date(`${valor}T00:00:00Z`);
+        return valor >= "1753-01-01" && Number.isFinite(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor;
+      }, "Ingresa una fecha válida.").nullable().optional(),
     })
     .strict(),
 });
@@ -47,6 +51,6 @@ export type CrearDetalleGastoInput = z.infer<
 
 export const gastoProempleoSchema = z.object({ params: z.object({ id: folio }) });
 export const editarDetalleGastoSchema = gastoProempleoSchema.extend({
-  body: crearDetalleGastoSchema.shape.body.pick({ monto: true, glosa: true }),
+  body: crearDetalleGastoSchema.shape.body.pick({ monto: true, glosa: true, fecfac_detren: true }),
 });
 export type EditarDetalleGastoInput = z.infer<typeof editarDetalleGastoSchema>["body"];

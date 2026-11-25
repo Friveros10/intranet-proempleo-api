@@ -23,6 +23,7 @@ import condocRoutes from './condoc.routes';
 import oficioCoberturaRoutes from './oficioCobertura.routes';
 import ordinariosRoutes from './ordinarios.routes';
 import detalleGastosRoutes from './detalleGastos.routes';
+import detalleReintegrosRoutes from './detalleReintegros.routes';
 
 const router = Router();
 router.use('/encuesta', encuestaRoutes);
@@ -47,6 +48,7 @@ router.use('/condoc', condocRoutes);
 router.use('/oficio-cobertura', oficioCoberturaRoutes);
 router.use('/ordinarios', ordinariosRoutes);
 router.use('/detalle-gastos', detalleGastosRoutes);
+router.use('/detalle-reintegros', detalleReintegrosRoutes);
 router.use('/plan-egreso-historico', planEgresoHistoricoRoutes);
 router.use('/ws', wsRoutes);
 router.use('/usuarios', usuarioRoutes);

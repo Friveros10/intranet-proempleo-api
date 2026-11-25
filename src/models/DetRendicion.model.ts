@@ -25,10 +25,7 @@ export interface DetRendicion {
   corr_detren3: number | null;
 }
 
-export const atributosDetRendicion: ModelAttributes<
-  Model<DetRendicion>,
-  DetRendicion
-> = {
+export const atributosDetRendicion = {
   corr_detren: { type: DataTypes.INTEGER, primaryKey: true, allowNull: false },
   mes_detren: { type: DataTypes.INTEGER, allowNull: false },
   ano_detren: { type: DataTypes.INTEGER, allowNull: false },
@@ -50,7 +47,7 @@ export const atributosDetRendicion: ModelAttributes<
   cod_region: DataTypes.INTEGER,
   EstApr_detren: "VARCHAR(15)",
   corr_detren3: DataTypes.INTEGER,
-};
+} satisfies ModelAttributes<Model<DetRendicion>, DetRendicion>;
 
 export class DetRendicionModel extends Model<DetRendicion> {}
 DetRendicionModel.init(atributosDetRendicion, {
