@@ -130,7 +130,7 @@ export const detalleGastosRepository = {
       SELECT DISTINCT p.corr_itemGas id, RTRIM(i.nom_itemGas) nombre
       FROM dbo.${tabla} p
       OUTER APPLY (
-        SELECT TOP (1) nom_itemGas FROM dbo.ITEMGASTOS
+        SELECT TOP (1) nom_itemGas FROM dbo.itemgastos_unificados
         WHERE corr_mar = :marco AND corr_itemGas = p.corr_itemGas
         ORDER BY nom_itemGas
       ) i

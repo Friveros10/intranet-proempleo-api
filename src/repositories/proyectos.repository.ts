@@ -473,7 +473,7 @@ export const proyectosRepository = {
           WHERE r.fol_pro = :folio AND r.corr_itemGas = t1.corr_itemGas
         ), 0) AS VARCHAR(18)) AS compaGas,
         NULL AS obs_proitemgas
-      FROM dbo.vista_ProItemGas t1
+      FROM dbo.itemgastos_unificados t1
       WHERE t1.corr_mar = (
         SELECT p.corr_mar FROM dbo.PROYECTOS p WHERE p.fol_pro = :folio
       )

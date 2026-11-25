@@ -1,7 +1,11 @@
 export function insertarConCorrelativo(
-  heredada: 'MARCO' | 'MARCODET' | 'DETDECHACIENDA',
-  tabla: 'marco_proempleo' | 'marcodet_proempleo' | 'detdechacienda_proempleo',
-  llave: 'corr_mar' | 'corr_detmar' | 'corr_dethac',
+  heredada: "MARCO" | "MARCODET" | "DETDECHACIENDA" | "ITEMGASTOS",
+  tabla:
+    | "marco_proempleo"
+    | "marcodet_proempleo"
+    | "detdechacienda_proempleo"
+    | "itemgastos_proempleo",
+  llave: "corr_mar" | "corr_detmar" | "corr_dethac" | "corr_itemGas",
   columnas: string,
   valores: string,
 ) {
