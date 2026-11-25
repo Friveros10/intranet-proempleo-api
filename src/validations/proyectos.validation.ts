@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { DetalleDeGastos } from "../constants/DetalleDeGastos";
 
 const id = z.coerce.number().int().positive().max(2147483647);
 const monto = z
@@ -233,13 +232,7 @@ export const catalogoPorComunaSchema = z.object({
 
 const gastoSchema = z
   .object({
-    corr_itemGas: z
-      .number()
-      .int()
-      .refine(
-        (valor) => DetalleDeGastos.some((detalle) => detalle.id === valor),
-        "El detalle de gasto no es válido",
-      ),
+    corr_itemGas: z.number().int().positive().max(2147483647),
     mon_proitemgas: monto,
     compaGas: monto,
   })
@@ -268,7 +261,7 @@ export const guardarProyectoSchema = z.object({
       fecini_pro: fecha,
       fecter_pro: fecha,
       rutres_pro: z.number().int().positive().max(2147483647),
-      gastos: z.array(gastoSchema).max(DetalleDeGastos.length).default([]),
+      gastos: z.array(gastoSchema).default([]),
     })
     .strict()
     .refine((body) => body.fecter_pro >= body.fecini_pro, {

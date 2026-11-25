@@ -6,6 +6,7 @@ import { AppError } from "../utils/AppError";
 import { calcularDv, parseRut } from "../utils/rut";
 import { bancoProyectosRepository } from "../repositories/bancoProyectos.repository";
 import { DetalleDeGastos } from "../constants/DetalleDeGastos";
+import { itemGastosRepository } from "../repositories/itemGastos.repository";
 import { proyectosRepository as repository } from "../repositories/proyectos.repository";
 import { postergacionListadoRepository } from "../repositories/postergacionListado.repository";
 import { regionRepository } from "../repositories/sicap/region.repository";
@@ -108,20 +109,34 @@ function nombreDetalleGasto(id: number): string | null {
   );
 }
 
-/**
- * La distribución se persiste completa, igual que la grilla legacy: cada ítem
- * del catálogo tiene una fila en proitemgas_proempleo, incluso si su monto es 0.
- * Esto evita proyectos sin detalle cuando el usuario no abre el modal de gastos.
- */
-function completarDistribucionGastos(
-  gastos: GuardarProyectoInput["gastos"],
-): GuardarProyectoInput["gastos"] {
-  const montos = new Map(gastos.map((gasto) => [gasto.corr_itemGas, gasto]));
-  return DetalleDeGastos.map((detalle) => ({
-    corr_itemGas: detalle.id,
-    mon_proitemgas: montos.get(detalle.id)?.mon_proitemgas ?? "0",
-    compaGas: montos.get(detalle.id)?.compaGas ?? "0",
-  }));
+async function catalogoGastosProyecto(
+  proyecto: { fol_pro: number; corr_mar: number | null },
+  transaction?: Transaction,
+) {
+  const decretos = await repository.marcosDecretosGastos(proyecto.fol_pro, transaction);
+  if (!decretos.length) {
+    return { marco: null, items: [], bloqueo: "Vincula un decreto al proyecto para ingresar el desglose." };
+  }
+  const marcos = decretos.flatMap(({ corr_mar }) => corr_mar === null ? [] : [corr_mar]);
+  const marco = proyecto.corr_mar && proyecto.corr_mar > 0
+    ? proyecto.corr_mar
+    : marcos.length === 1 ? marcos[0] : null;
+  if (!marco) {
+    return {
+      marco, items: [],
+      bloqueo: marcos.length > 1
+        ? "El proyecto aún no tiene un marco registrado y sus decretos apuntan a más de uno."
+        : "El proyecto todavía no tiene un marco presupuestario definido.",
+    };
+  }
+  const catalogo = await itemGastosRepository.listar(marco, transaction);
+  return {
+    marco,
+    items: catalogo.map((item) => ({
+      id: item.corr_itemGas, nombre_detalle: item.nom_itemGas, tipo: item.categoria ?? "",
+    })),
+    bloqueo: catalogo.length ? null : "El marco del proyecto no tiene ítems de gasto configurados.",
+  };
 }
 
 function rutValidado(rutFormateado: string) {
@@ -342,15 +357,7 @@ export const proyectosService = {
   },
 
   async gastos(folio: number, origen: OrigenMarco = "legacy") {
-    const proyecto = await repository.obtener(folio, origen);
-    if (!proyecto) throw new AppError("Proyecto no encontrado", 404);
-    return proyecto.gastos.map((gasto) => ({
-      ...gasto,
-      nombre:
-        origen === "proempleo"
-          ? nombreDetalleGasto(gasto.corr_itemGas)
-          : gasto.nombre,
-    }));
+    return (await this.obtener(folio, origen)).gastos;
   },
 
   async obtener(
@@ -361,10 +368,13 @@ export const proyectosService = {
     const proyecto = await repository.obtener(folio, origen, transaction);
     if (!proyecto) throw new AppError("Proyecto no encontrado", 404);
     if (origen === "proempleo") {
+      const detalleGastos = await catalogoGastosProyecto(proyecto, transaction);
+      const nombres = new Map(detalleGastos.items.map((item) => [item.id, item.nombre_detalle]));
       proyecto.gastos = proyecto.gastos.map((gasto) => ({
         ...gasto,
-        nombre: nombreDetalleGasto(gasto.corr_itemGas),
+        nombre: gasto.nombre ?? nombres.get(gasto.corr_itemGas) ?? nombreDetalleGasto(gasto.corr_itemGas),
       }));
+      return { ...proyecto, detalleGastos };
     }
     return proyecto;
   },
@@ -639,7 +649,7 @@ export const proyectosService = {
   },
 
   async crear(data: GuardarProyectoInput, usuario: string) {
-    const gastos = completarDistribucionGastos(data.gastos);
+    if (data.gastos.length) throw new AppError("Crea el proyecto y vincula un decreto antes de ingresar el desglose.", 409);
     await validarReferencias(data);
     const meses = mesesAproximados(data.fecini_pro, data.fecter_pro);
     return sequelize.transaction(async (transaction) => {
@@ -659,17 +669,6 @@ export const proyectosService = {
         usuario,
         transaction,
       );
-      await repository.reemplazarGastos(
-        data.fol_pro,
-        gastos,
-        {
-          anio: data.ano_pro,
-          mes: Number(data.fecini_pro.slice(5, 7)),
-          region: data.reg_pro,
-          usuario,
-        },
-        transaction,
-      );
       return this.obtener(data.fol_pro, "proempleo", transaction);
     });
   },
@@ -681,10 +680,9 @@ export const proyectosService = {
   ) {
     if (data.fol_pro !== folioParam)
       throw new AppError("El folio no se puede modificar", 400);
-    const gastos = completarDistribucionGastos(data.gastos);
     await validarReferencias(data);
     const meses = mesesAproximados(data.fecini_pro, data.fecter_pro);
-    return sequelize.transaction(async (transaction) => {
+    return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
       const actual = await repository.obtener(
         folioParam,
         "proempleo",
@@ -692,6 +690,17 @@ export const proyectosService = {
       );
       if (!actual || actual.est_pro === "ELIMINADO") {
         throw new AppError("Proyecto no encontrado para modificar", 404);
+      }
+      if (data.gastos.length) {
+        const { marco, items, bloqueo } = await catalogoGastosProyecto(actual, transaction);
+        if (!marco || bloqueo) throw new AppError(bloqueo ?? "El proyecto no tiene marco presupuestario.", 409);
+        const ids = new Set(items.map((item) => item.id));
+        if (data.gastos.some((gasto) => !ids.has(gasto.corr_itemGas))) {
+          throw new AppError("El desglose contiene ítems ajenos al marco del proyecto.", 400);
+        }
+        if (!actual.corr_mar || actual.corr_mar < 0) {
+          await repository.vincularMarcoGastos(folioParam, marco, transaction);
+        }
       }
       const nombre =
         actual.banco_pro === data.banco_pro
@@ -716,9 +725,9 @@ export const proyectosService = {
         usuario,
         transaction,
       );
-      await repository.reemplazarGastos(
+      if (data.gastos.length) await repository.reemplazarGastos(
         folioParam,
-        gastos,
+        data.gastos,
         {
           anio: data.ano_pro,
           mes: Number(data.fecini_pro.slice(5, 7)),

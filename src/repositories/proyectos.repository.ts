@@ -1,5 +1,6 @@
 import { QueryTypes, Transaction } from "sequelize";
 import { sequelize } from "../database/sequelize";
+import { AppError } from "../utils/AppError";
 import type { OrigenMarco } from "../validations/marco.validation";
 import { horarioSemanalSchema } from "../validations/proyectos.validation";
 import type {
@@ -41,7 +42,7 @@ function leerHorarioJson(json: string | null): HorarioSemanal | null {
 const columnas = `p.fol_pro, RTRIM(p.nom_pro) AS nom_pro, p.rutint_pro, p.ruteje_pro, p.reg_pro, p.ciu_pro, p.com_pro,
   p.obj_pro, p.imp_pro, p.obs_pro, p.mes_pro, p.emp_pro, p.fecini_pro, p.fecter_pro, p.rutres_pro,
   CAST(p.mon_pro AS VARCHAR(18)) AS mon_pro, RTRIM(p.jor_pro) AS jor_pro, p.ano_pro, RTRIM(p.est_pro) AS est_pro,
-  p.usu_cre, p.fec_cre, p.usu_mod, p.fec_mod, p.usu_eli, p.fec_eli`;
+  p.usu_cre, p.fec_cre, p.usu_mod, p.fec_mod, p.usu_eli, p.fec_eli, p.corr_mar`;
 
 const union = `SELECT ${columnas}, NULL AS banco_pro, 'legacy' AS origen FROM dbo.PROYECTOS p
   UNION ALL SELECT ${columnas}, p.banco_pro, 'proempleo' AS origen FROM dbo.proyectos_proempleo p`;
@@ -87,6 +88,7 @@ export type ProyectoFila = {
   usu_eli: string | null;
   fec_eli: Date | null;
   banco_pro: number | null;
+  corr_mar: number | null;
   origen: OrigenMarco;
 };
 
@@ -445,13 +447,16 @@ export const proyectosRepository = {
     if (origen === "proempleo") {
       return sequelize.query<GastoProyecto>(
         `
-        SELECT g.corr_itemGas, NULL AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas,
+        SELECT g.corr_itemGas, RTRIM(i.nom_itemGas) AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas,
           CAST(COALESCE((
             SELECT SUM(r.mon_detren) FROM dbo.detrendicion_proempleo r
             WHERE r.fol_pro = g.fol_pro AND r.corr_itemGas = g.corr_itemGas
+              AND ISNULL(r.est_detren, '') <> 'ELIMINADO'
           ), 0) AS VARCHAR(18)) AS compaGas,
           g.obs_proitemgas
-        FROM dbo.proitemgas_proempleo g WHERE g.fol_pro = :folio ORDER BY g.corr_itemGas`,
+        FROM dbo.proitemgas_proempleo g
+        LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = g.corr_itemGas
+        WHERE g.fol_pro = :folio ORDER BY g.corr_itemGas`,
         {
           type: QueryTypes.SELECT,
           replacements: { folio },
@@ -614,6 +619,38 @@ export const proyectosRepository = {
       ORDER BY fol_dec DESC, cor_decpro DESC`,
       { type: QueryTypes.SELECT, replacements: { folio }, transaction },
     );
+  },
+
+  async marcosDecretosGastos(folio: number, transaction?: Transaction) {
+    return sequelize.query<{ corr_mar: number | null }>(`
+      WITH asociaciones AS (
+        SELECT fol_dec, est_decpro FROM dbo.DECPRO WHERE fol_pro = :folio
+        UNION ALL SELECT fol_dec, est_decpro FROM dbo.decpro_proempleo WHERE fol_pro = :folio
+      ), decretos AS (
+        SELECT fol_dec, est_dec FROM dbo.DECRETOS
+        UNION ALL SELECT fol_dec, est_dec FROM dbo.decretos_proempleo
+      ), detalles AS (
+        SELECT fol_dec, corr_mar FROM dbo.DECDET
+        UNION ALL SELECT fol_dec, corr_mar FROM dbo.decretosDetalle_proempleo
+      )
+      SELECT DISTINCT d.corr_mar FROM asociaciones a
+      INNER JOIN decretos h ON h.fol_dec = a.fol_dec AND ISNULL(h.est_dec, '') <> 'ELIMINADO'
+      LEFT JOIN detalles d ON d.fol_dec = a.fol_dec AND d.corr_mar > 0
+      WHERE ISNULL(a.est_decpro, '') <> 'ELIMINADO'
+    `, { replacements: { folio }, type: QueryTypes.SELECT, transaction });
+  },
+
+  async vincularMarcoGastos(folio: number, marco: number, transaction: Transaction) {
+    await sequelize.query(`
+      UPDATE p SET corr_mar = m.corr_mar, subtitulo_mar = ISNULL(m.subtitulo_mar, 0),
+        item_mar = ISNULL(m.item_mar, 0), linea_mar = ISNULL(m.linea_mar, 0)
+      FROM dbo.proyectos_proempleo p
+      INNER JOIN (
+        SELECT corr_mar, subtitulo_mar, item_mar, linea_mar FROM dbo.MARCO
+        UNION ALL SELECT corr_mar, subtitulo_mar, item_mar, linea_mar FROM dbo.marco_proempleo
+      ) m ON m.corr_mar = :marco
+      WHERE p.fol_pro = :folio AND ISNULL(p.corr_mar, 0) <= 0
+    `, { replacements: { folio, marco }, transaction });
   },
 
   async existeBeneficiario(
@@ -927,24 +964,40 @@ export const proyectosRepository = {
     // Esta operación siempre participa de la misma transacción que la cabecera:
     // si falla un detalle, tampoco queda guardado el proyecto (o su modificación).
     await sequelize.query(
-      "DELETE FROM dbo.proitemgas_proempleo WHERE fol_pro = :folio",
+      "DELETE FROM dbo.proitemgas_proempleo WHERE fol_pro = :folio AND corr_itemGas IN (:items)",
       {
         type: QueryTypes.DELETE,
-        replacements: { folio },
+        replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
         transaction,
       },
     );
     await sequelize.query(
       `
       DELETE FROM dbo.detrendicion_proempleo
-      WHERE fol_pro = :folio AND fol_dec = '00000000' AND glo_detren = 'FICHA_PROYECTO'`,
+      WHERE fol_pro = :folio AND fol_dec = '00000000' AND glo_detren = 'FICHA_PROYECTO'
+        AND corr_itemgas IN (:items)`,
       {
         type: QueryTypes.DELETE,
-        replacements: { folio },
+        replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
         transaction,
       },
     );
+    const rendiciones = await sequelize.query<{ item: number; total: string }>(`
+      SELECT corr_itemgas item, CONVERT(VARCHAR(40), SUM(CAST(mon_detren AS DECIMAL(38, 0)))) total
+      FROM dbo.detrendicion_proempleo
+      WHERE fol_pro = :folio AND corr_itemgas IN (:items) AND ISNULL(est_detren, '') <> 'ELIMINADO'
+      GROUP BY corr_itemgas
+    `, {
+      type: QueryTypes.SELECT,
+      replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
+      transaction,
+    });
+    const rendido = new Map(rendiciones.map(({ item, total }) => [item, BigInt(total ?? "0")]));
     for (const gasto of gastos) {
+      const diferencia = BigInt(gasto.compaGas) - (rendido.get(gasto.corr_itemGas) ?? 0n);
+      if (diferencia < 0n) {
+        throw new AppError("El gasto ingresado no puede ser menor que el monto ya rendido para el ítem.", 409);
+      }
       await sequelize.query(
         `
         INSERT INTO dbo.proitemgas_proempleo (corr_itemGas, fol_pro, mon_proitemgas, obs_proitemgas)
@@ -974,7 +1027,7 @@ export const proyectosRepository = {
           replacements: {
             folio,
             detalle: gasto.corr_itemGas,
-            montoGasto: gasto.compaGas,
+            montoGasto: diferencia.toString(),
             ...contexto,
           },
           transaction,
