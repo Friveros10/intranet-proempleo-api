@@ -9,5 +9,7 @@ router.use(requireAuth, requireRoles('ADMIN', 'MINISTERIO'));
 router.get('/', asyncHandler(controller.listar));
 router.get('/proyecto', asyncHandler(controller.buscarProyecto));
 router.post('/', asyncHandler(controller.crear));
+router.patch('/proempleo/:id', asyncHandler(controller.editar));
+router.delete('/proempleo/:id', asyncHandler(controller.eliminar));
 
 export default router;

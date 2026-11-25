@@ -4,6 +4,8 @@ import { AppError } from "../utils/AppError";
 import {
   buscarProyectoGastoSchema,
   crearDetalleGastoSchema,
+  editarDetalleGastoSchema,
+  gastoProempleoSchema,
   listarDetalleGastosSchema,
 } from "../validations/detalleGastos.validation";
 
@@ -22,5 +24,15 @@ export const detalleGastosController = {
     if (!req.user?.sub) throw new AppError("Sesión inválida.", 401);
     const { body } = crearDetalleGastoSchema.parse({ body: req.body });
     res.status(201).json(await service.crear(body, req.user.sub));
+  },
+  async editar(req: Request, res: Response) {
+    if (!req.user?.sub) throw new AppError("Sesión inválida.", 401);
+    const { params, body } = editarDetalleGastoSchema.parse(req);
+    res.json(await service.cambiarGasto(params.id, body, req.user.sub));
+  },
+  async eliminar(req: Request, res: Response) {
+    if (!req.user?.sub) throw new AppError("Sesión inválida.", 401);
+    const { params } = gastoProempleoSchema.parse(req);
+    res.json(await service.cambiarGasto(params.id, null, req.user.sub));
   },
 };

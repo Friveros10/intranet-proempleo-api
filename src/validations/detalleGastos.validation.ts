@@ -34,15 +34,6 @@ export const crearDetalleGastoSchema = z.object({
           /^[1-9]\d{0,17}$/,
           "Ingresa un monto positivo en pesos enteros.",
         ),
-      cheque: z.string().trim().min(1).max(15).default("1"),
-      factura: z
-        .string()
-        .regex(
-          /^\d{1,18}$/,
-          "La factura debe ser un número de hasta 18 dígitos.",
-        )
-        .default("1"),
-      egreso: z.string().trim().min(1).max(15).default("1"),
       glosa: z.string().trim().max(200).optional(),
     })
     .strict(),
@@ -53,3 +44,9 @@ export type ListarDetalleGastosQuery = z.infer<
 export type CrearDetalleGastoInput = z.infer<
   typeof crearDetalleGastoSchema
 >["body"];
+
+export const gastoProempleoSchema = z.object({ params: z.object({ id: folio }) });
+export const editarDetalleGastoSchema = gastoProempleoSchema.extend({
+  body: crearDetalleGastoSchema.shape.body.pick({ monto: true, glosa: true }),
+});
+export type EditarDetalleGastoInput = z.infer<typeof editarDetalleGastoSchema>["body"];

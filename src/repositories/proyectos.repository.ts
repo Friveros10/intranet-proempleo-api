@@ -1,6 +1,7 @@
 import { QueryTypes, Transaction } from "sequelize";
 import { sequelize } from "../database/sequelize";
 import { AppError } from "../utils/AppError";
+import { guardarAcumulado, guardarPresupuesto, montosProyectoSql } from "./montosProyecto.sql";
 import type { OrigenMarco } from "../validations/marco.validation";
 import { horarioSemanalSchema } from "../validations/proyectos.validation";
 import type {
@@ -440,55 +441,22 @@ export const proyectosRepository = {
   },
 
   async gastos(
-    folio: number,
-    origen: OrigenMarco,
-    transaction?: Transaction,
+    folio: number, origen: OrigenMarco, transaction?: Transaction,
   ): Promise<GastoProyecto[]> {
-    if (origen === "proempleo") {
-      return sequelize.query<GastoProyecto>(
-        `
-        SELECT g.corr_itemGas, RTRIM(i.nom_itemGas) AS nombre, CAST(g.mon_proitemgas AS VARCHAR(18)) AS mon_proitemgas,
-          CAST(COALESCE((
-            SELECT SUM(r.mon_detren) FROM dbo.detrendicion_proempleo r
-            WHERE r.fol_pro = g.fol_pro AND r.corr_itemGas = g.corr_itemGas
-              AND ISNULL(r.est_detren, '') <> 'ELIMINADO'
-          ), 0) AS VARCHAR(18)) AS compaGas,
-          g.obs_proitemgas
-        FROM dbo.proitemgas_proempleo g
-        LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = g.corr_itemGas
-        WHERE g.fol_pro = :folio ORDER BY g.corr_itemGas`,
-        {
-          type: QueryTypes.SELECT,
-          replacements: { folio },
-          transaction,
-        },
-      );
-    }
-    // Replica la consulta de la intranet legacy: el marco define qué ítems se
-    // muestran, aunque el proyecto todavía no tenga un monto asignado para ellos.
-    return sequelize.query<GastoProyecto>(
-      `
-      SELECT t1.corr_itemGas, RTRIM(t1.nom_itemGas) AS nombre,
-        CAST(COALESCE((
-          SELECT p.mon_proitemgas FROM dbo.PROITEMGAS p
-          WHERE p.fol_pro = :folio AND p.corr_itemGas = t1.corr_itemGas
-        ), 0) AS VARCHAR(18)) AS mon_proitemgas,
-        CAST(COALESCE((
-          SELECT SUM(r.mon_detren) FROM dbo.DETRENDICION r
-          WHERE r.fol_pro = :folio AND r.corr_itemGas = t1.corr_itemGas
-        ), 0) AS VARCHAR(18)) AS compaGas,
-        NULL AS obs_proitemgas
-      FROM dbo.itemgastos_unificados t1
-      WHERE t1.corr_mar = (
-        SELECT p.corr_mar FROM dbo.PROYECTOS p WHERE p.fol_pro = :folio
+    return sequelize.query<GastoProyecto>(`
+      ${montosProyectoSql}, items AS (
+        SELECT item FROM montos
+        UNION SELECT i.corr_itemGas FROM dbo.itemgastos_unificados i
+        INNER JOIN dbo.PROYECTOS p ON p.corr_mar = i.corr_mar
+        WHERE :origen = 'legacy' AND p.fol_pro = :folio
       )
-      ORDER BY t1.corr_itemGas`,
-      {
-        type: QueryTypes.SELECT,
-        replacements: { folio },
-        transaction,
-      },
-    );
+      SELECT t.item corr_itemGas, RTRIM(i.nom_itemGas) nombre,
+        CONVERT(VARCHAR(40), ISNULL(m.presupuesto, 0)) mon_proitemgas,
+        CONVERT(VARCHAR(40), ISNULL(m.gastado, 0)) compaGas, NULL obs_proitemgas
+      FROM items t LEFT JOIN montos m ON m.item = t.item
+      LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = t.item
+      ORDER BY t.item
+    `, { replacements: { folio, origen }, type: QueryTypes.SELECT, transaction });
   },
 
   periodosBeneficiarios(folio: number): Promise<PeriodoBeneficiarios[]> {
@@ -961,78 +929,25 @@ export const proyectosRepository = {
     contexto: { anio: number; mes: number; region: number; usuario: string },
     transaction: Transaction,
   ) {
-    // Esta operación siempre participa de la misma transacción que la cabecera:
-    // si falla un detalle, tampoco queda guardado el proyecto (o su modificación).
-    await sequelize.query(
-      "DELETE FROM dbo.proitemgas_proempleo WHERE fol_pro = :folio AND corr_itemGas IN (:items)",
-      {
-        type: QueryTypes.DELETE,
-        replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
-        transaction,
-      },
-    );
-    await sequelize.query(
-      `
-      DELETE FROM dbo.detrendicion_proempleo
-      WHERE fol_pro = :folio AND fol_dec = '00000000' AND glo_detren = 'FICHA_PROYECTO'
-        AND corr_itemgas IN (:items)`,
-      {
-        type: QueryTypes.DELETE,
-        replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
-        transaction,
-      },
-    );
-    const rendiciones = await sequelize.query<{ item: number; total: string }>(`
-      SELECT corr_itemgas item, CONVERT(VARCHAR(40), SUM(CAST(mon_detren AS DECIMAL(38, 0)))) total
-      FROM dbo.detrendicion_proempleo
-      WHERE fol_pro = :folio AND corr_itemgas IN (:items) AND ISNULL(est_detren, '') <> 'ELIMINADO'
-      GROUP BY corr_itemgas
-    `, {
-      type: QueryTypes.SELECT,
-      replacements: { folio, items: gastos.map((gasto) => gasto.corr_itemGas) },
-      transaction,
-    });
-    const rendido = new Map(rendiciones.map(({ item, total }) => [item, BigInt(total ?? "0")]));
+    const replacements = { folio, origen: "proempleo", items: gastos.map((gasto) => gasto.corr_itemGas) };
+    const rendiciones = await sequelize.query<{ item: number; total: string; anterior: string }>(`
+      ${montosProyectoSql}
+      SELECT item, CONVERT(VARCHAR(40), rendido) total, CONVERT(VARCHAR(40), rendidoAnterior) anterior
+      FROM montos WHERE item IN (:items)
+    `, { type: QueryTypes.SELECT, replacements, transaction });
+    const porItem = new Map(rendiciones.map((fila) => [fila.item, fila]));
+
     for (const gasto of gastos) {
-      const diferencia = BigInt(gasto.compaGas) - (rendido.get(gasto.corr_itemGas) ?? 0n);
-      if (diferencia < 0n) {
-        throw new AppError("El gasto ingresado no puede ser menor que el monto ya rendido para el ítem.", 409);
+      const total = BigInt(gasto.compaGas);
+      const rendicion = porItem.get(gasto.corr_itemGas);
+      if (total < BigInt(rendicion?.total ?? "0") || total > BigInt(gasto.mon_proitemgas)) {
+        throw new AppError("El gasto del ítem debe cubrir lo ya rendido y no superar su presupuesto.", 409);
       }
-      await sequelize.query(
-        `
-        INSERT INTO dbo.proitemgas_proempleo (corr_itemGas, fol_pro, mon_proitemgas, obs_proitemgas)
-        VALUES (:detalle, :folio, :monto, NULL)`,
-        {
-          type: QueryTypes.INSERT,
-          replacements: {
-            detalle: gasto.corr_itemGas,
-            folio,
-            monto: gasto.mon_proitemgas,
-          },
-          transaction,
-        },
-      );
-      await sequelize.query(
-        `
-        INSERT INTO dbo.detrendicion_proempleo
-          (mes_detren, ano_detren, fol_dec, fol_pro, mon_detren, che_detren,
-           fac_detren, usu_cre, fec_cre, est_detren, corr_itemgas, egr_detren,
-           glo_detren, cod_region)
-        VALUES
-          (:mes, :anio, '00000000', :folio, :montoGasto, 'FICHA_PROYECTO',
-           0, :usuario, GETDATE(), 'ACTIVO', :detalle, 'FICHA',
-           'FICHA_PROYECTO', :region)`,
-        {
-          type: QueryTypes.INSERT,
-          replacements: {
-            folio,
-            detalle: gasto.corr_itemGas,
-            montoGasto: diferencia.toString(),
-            ...contexto,
-          },
-          transaction,
-        },
-      );
+      const partida = { folio, item: gasto.corr_itemGas };
+      await guardarPresupuesto({ ...partida, ...contexto, monto: gasto.mon_proitemgas }, transaction);
+      await guardarAcumulado({
+        ...partida, monto: String(total - BigInt(rendicion?.anterior ?? "0")),
+      }, transaction);
     }
   },
 

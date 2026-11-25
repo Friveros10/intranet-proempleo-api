@@ -55,7 +55,7 @@ export const guardarDecretoSchema = z.object({
         value >= '1900-01-01' && value <= '9998-12-31';
     }, 'Fecha inválida'),
     obs_dec: z.string().trim().max(250).nullable(),
-    mon_dec: monto,
+    mon_dec: monto.optional(),
     cob_dec: z.enum(coberturasDecreto),
     rutint_dec: id,
     programaInt: z.enum(programasIntermediario),

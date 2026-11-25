@@ -2,8 +2,10 @@ import { QueryTypes, type Transaction } from "sequelize";
 import { sequelize } from "../database/sequelize";
 import { DetRendicionModel } from "../models/DetRendicion.model";
 import { DetRendicionProempleoModel } from "../models/DetRendicionProempleo.model";
+import { guardarAcumulado, guardarPresupuesto, marcaAcumulado, marcaAsiento, montosProyectoSql } from "./montosProyecto.sql";
 import type {
   CrearDetalleGastoInput,
+  EditarDetalleGastoInput,
   ListarDetalleGastosQuery,
 } from "../validations/detalleGastos.validation";
 
@@ -15,7 +17,7 @@ type ProyectoGasto = {
   marco: number;
   origen: "legacy" | "proempleo";
 };
-type ItemGasto = { id: number; nombre: string | null };
+type ItemGasto = { id: number; nombre: string | null; saldo: string; presupuesto: string; presupuestoNuevo: string | null; acumulado: string };
 type GastoListado = {
   correlativo: number;
   folio: number;
@@ -122,45 +124,93 @@ export const detalleGastosRepository = {
     return proyecto ?? null;
   },
 
-  items(proyecto: ProyectoGasto, transaction?: Transaction) {
-    const tabla =
-      proyecto.origen === "proempleo" ? "proitemgas_proempleo" : "PROITEMGAS";
+  items(proyecto: Pick<ProyectoGasto, "folio" | "origen">, transaction?: Transaction) {
     return sequelize.query<ItemGasto>(
       `
-      SELECT DISTINCT p.corr_itemGas id, RTRIM(i.nom_itemGas) nombre
-      FROM dbo.${tabla} p
-      OUTER APPLY (
-        SELECT TOP (1) nom_itemGas FROM dbo.itemgastos_unificados
-        WHERE corr_mar = :marco AND corr_itemGas = p.corr_itemGas
-        ORDER BY nom_itemGas
-      ) i
-      WHERE p.fol_pro = :folio ORDER BY id
+      ${montosProyectoSql}
+      SELECT m.item id, RTRIM(i.nom_itemGas) nombre,
+        CONVERT(VARCHAR(40), m.presupuesto - m.gastado) saldo,
+        CONVERT(VARCHAR(40), m.presupuesto) presupuesto,
+        CONVERT(VARCHAR(40), m.presupuestoNuevo) presupuestoNuevo,
+        CONVERT(VARCHAR(40), m.acumulado) acumulado
+      FROM montos m LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = m.item
+      WHERE m.presupuesto > m.gastado ORDER BY m.item
     `,
       {
         type: QueryTypes.SELECT,
-        replacements: { folio: proyecto.folio, marco: proyecto.marco },
+        replacements: { folio: proyecto.folio, origen: proyecto.origen },
         transaction,
       },
     );
   },
 
+  async obtenerProempleo(id: number, transaction?: Transaction) {
+    const [gasto] = await sequelize.query<{
+      folio: number; item: number | null; monto: string; asiento: boolean; origen: ProyectoGasto["origen"];
+    }>(`
+      SELECT r.fol_pro folio, r.corr_itemgas item, CONVERT(VARCHAR(40), r.mon_detren) monto,
+        CONVERT(BIT, CASE WHEN r.EstApr_detren = :marca THEN 1 ELSE 0 END) asiento,
+        CASE WHEN p.fol_pro IS NULL THEN 'legacy' ELSE 'proempleo' END origen
+      FROM ${tablaNueva} r LEFT JOIN dbo.proyectos_proempleo p ON p.fol_pro = r.fol_pro
+      WHERE r.corr_detren = :id AND NULLIF(RTRIM(r.fol_dec), '') IS NOT NULL
+        AND r.fol_dec <> '00000000' AND ISNULL(r.est_detren, '') <> 'ELIMINADO'
+    `, { type: QueryTypes.SELECT, replacements: { id, marca: marcaAsiento }, transaction });
+    return gasto ?? null;
+  },
+
+  async ajustarAcumulado(folio: number, item: number, diferencia: string, transaction: Transaction) {
+    const [fila] = await sequelize.query<{ item: number }>(`
+      UPDATE dbo.proitemgas_proempleo
+      SET mon_proitemgas = mon_proitemgas + CONVERT(NUMERIC(18,0), :diferencia)
+      OUTPUT INSERTED.corr_itemGas item
+      WHERE fol_pro = :folio AND corr_itemGas = :item AND obs_proitemgas = :marca
+        AND mon_proitemgas + CONVERT(NUMERIC(18,0), :diferencia) >= 0
+    `, { type: QueryTypes.SELECT, replacements: { folio, item, diferencia, marca: marcaAcumulado }, transaction });
+    return Boolean(fila);
+  },
+
+  async cambiar(id: number, data: EditarDetalleGastoInput | null, usuario: string, transaction: Transaction) {
+    await sequelize.query(`
+      UPDATE ${tablaNueva}
+      SET usu_mod = :usuario, ${data ? 'mon_detren = :monto, glo_detren = :glosa' : "est_detren = 'ELIMINADO', fec_eli = GETDATE()"}
+      WHERE corr_detren = :id
+    `, {
+      replacements: { id, usuario, ...(data && { monto: data.monto, glosa: data.glosa || null }) }, transaction,
+    });
+    return { correlativo: id };
+  },
+
   async crear(
     data: CrearDetalleGastoInput,
-    region: number,
+    proyecto: ProyectoGasto,
+    item: ItemGasto,
     usuario: string,
     transaction: Transaction,
   ) {
+    const partida = { folio: data.folio, item: data.item };
+    if (proyecto.origen === "proempleo" && item.presupuestoNuevo === null) {
+      await guardarPresupuesto({
+        ...partida, monto: item.presupuesto, mes: data.mes, anio: data.anio,
+        region: proyecto.region, usuario,
+      }, transaction);
+    }
+    await guardarAcumulado({
+      ...partida, monto: String(BigInt(item.acumulado) + BigInt(data.monto)),
+    }, transaction);
     const [gasto] = await sequelize.query<{ correlativo: number }>(
       `
       INSERT INTO ${tablaNueva} (mes_detren, ano_detren, fol_dec, fol_pro, mon_detren,
-        che_detren, fac_detren, usu_cre, fec_cre, est_detren, corr_itemgas, egr_detren, glo_detren, cod_region)
+        che_detren, fac_detren, usu_cre, fec_cre, est_detren, corr_itemgas, egr_detren,
+        glo_detren, cod_region, EstApr_detren)
       OUTPUT INSERTED.corr_detren correlativo
-      VALUES (:mes, :anio, :decreto, :folio, :monto, :cheque, :factura, :usuario, GETDATE(),
-        'ACTIVO', :item, :egreso, :glosa, :region)
+      VALUES (:mes, :anio, :decreto, :folio, :monto, '1', 1, :usuario, GETDATE(),
+        'ACTIVO', :item, '1', :glosa, :region, :marca)
     `,
       {
         type: QueryTypes.SELECT,
-        replacements: { ...data, glosa: data.glosa || null, region, usuario },
+        replacements: {
+          ...data, glosa: data.glosa || null, region: proyecto.region, usuario, marca: marcaAsiento,
+        },
         transaction,
       },
     );

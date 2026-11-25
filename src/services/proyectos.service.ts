@@ -7,6 +7,7 @@ import { calcularDv, parseRut } from "../utils/rut";
 import { bancoProyectosRepository } from "../repositories/bancoProyectos.repository";
 import { DetalleDeGastos } from "../constants/DetalleDeGastos";
 import { itemGastosRepository } from "../repositories/itemGastos.repository";
+import { bloquearGastosProyecto } from "../repositories/montosProyecto.sql";
 import { proyectosRepository as repository } from "../repositories/proyectos.repository";
 import { postergacionListadoRepository } from "../repositories/postergacionListado.repository";
 import { regionRepository } from "../repositories/sicap/region.repository";
@@ -132,9 +133,11 @@ async function catalogoGastosProyecto(
   const catalogo = await itemGastosRepository.listar(marco, transaction);
   return {
     marco,
-    items: catalogo.map((item) => ({
-      id: item.corr_itemGas, nombre_detalle: item.nom_itemGas, tipo: item.categoria ?? "",
-    })),
+    items: catalogo
+      .map((item) => ({
+        id: item.corr_itemGas, nombre_detalle: item.nom_itemGas, tipo: item.categoria ?? "",
+      }))
+      .sort((a, b) => b.id - a.id),
     bloqueo: catalogo.length ? null : "El marco del proyecto no tiene ítems de gasto configurados.",
   };
 }
@@ -683,6 +686,9 @@ export const proyectosService = {
     await validarReferencias(data);
     const meses = mesesAproximados(data.fecini_pro, data.fecter_pro);
     return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
+      if (data.gastos.length && !await bloquearGastosProyecto(folioParam, transaction)) {
+        throw new AppError("El proyecto está siendo actualizado. Intenta nuevamente.", 409);
+      }
       const actual = await repository.obtener(
         folioParam,
         "proempleo",
