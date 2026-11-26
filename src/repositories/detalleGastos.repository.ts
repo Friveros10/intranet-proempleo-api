@@ -23,6 +23,7 @@ type GastoListado = {
   correlativo: number;
   folio: number;
   item: number | null;
+  nombreItem: string | null;
   monto: string;
   cheque: string | null;
   factura: string | null;
@@ -67,10 +68,11 @@ export const detalleGastosRepository = {
       ), meta AS (
         SELECT *, CASE WHEN :page > totalPages THEN totalPages ELSE :page END pagina FROM totales
       )
-      SELECT f.*, RTRIM(r.Nom_region) nombreRegion, m.total, m.totalPages, m.pagina
+      SELECT f.*, RTRIM(i.nom_itemGas) nombreItem, RTRIM(r.Nom_region) nombreRegion, m.total, m.totalPages, m.pagina
       FROM meta m LEFT JOIN filtrados f
         ON f.fila BETWEEN (m.pagina - 1) * :limit + 1 AND m.pagina * :limit
       LEFT JOIN dbo.REGIONES r ON r.cod_region = f.region
+      LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = f.item
       ORDER BY f.fila
     `,
       {
