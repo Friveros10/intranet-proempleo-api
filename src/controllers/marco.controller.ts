@@ -13,12 +13,7 @@ function usuario(req: Request) {
 export const marcoController = {
   async listar(req: Request, res: Response) {
     const { query } = listarMarcosSchema.parse({ query: req.query });
-    const resultado = await marcoService.listar(query);
-    registrarAuditoriaOpcional({
-      req, usuarioId: req.user?.sub ?? null, accion: 'MARCO_LISTADO', modulo: 'LEY_DE_PRESUPUESTO',
-      entidad: 'MARCO', notificar: false, detalle: `Listado de leyes de presupuesto, página ${resultado.pagination.page}.`,
-    });
-    res.json(resultado);
+    res.json(await marcoService.listar(query));
   },
 
   async anios(_req: Request, res: Response) {
@@ -27,13 +22,7 @@ export const marcoController = {
 
   async obtener(req: Request, res: Response) {
     const { params, query } = obtenerMarcoSchema.parse({ params: req.params, query: req.query });
-    const marco = await marcoService.obtener(params.id, query.origen);
-    registrarAuditoriaOpcional({
-      req, usuarioId: req.user?.sub ?? null, accion: 'MARCO_CONSULTADO', modulo: 'LEY_DE_PRESUPUESTO',
-      entidad: 'MARCO', registroId: String(params.id), notificar: false,
-      detalle: `Consulta de la ficha del marco ${params.id} (${query.origen}).`,
-    });
-    res.json(marco);
+    res.json(await marcoService.obtener(params.id, query.origen));
   },
 
   async crear(req: Request, res: Response) {

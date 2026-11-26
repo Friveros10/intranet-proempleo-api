@@ -112,7 +112,8 @@ export const decretosHaciendaService = {
         400,
       );
     return sequelize.transaction(async (transaction) => {
-      if (!(await repository.obtener(folio, "proempleo", transaction))) {
+      const anterior = await repository.obtener(folio, "proempleo", transaction);
+      if (!anterior) {
         throw new AppError("Decreto de Hacienda no encontrado", 404);
       }
       const existentes = await repository.detalles(
@@ -141,7 +142,8 @@ export const decretosHaciendaService = {
       );
       for (const detalle of data.detalles)
         await repository.guardarDetalle(folio, detalle, transaction);
-      return this.obtener(folio, "proempleo", transaction);
+      const decreto = await this.obtener(folio, "proempleo", transaction);
+      return { decreto, anterior, detallesAnteriores: existentes };
     });
   },
 };

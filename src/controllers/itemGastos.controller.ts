@@ -8,13 +8,7 @@ import { obtenerMarcoSchema } from "../validations/marco.validation";
 export const itemGastosController = {
   async listar(req: Request, res: Response) {
     const { params, query } = obtenerMarcoSchema.parse(req);
-    const items = await service.listar(params.id, query.origen);
-    registrarAuditoriaOpcional({
-      req, usuarioId: req.user?.sub ?? null, accion: "MARCO_ITEMS_CONSULTADOS", modulo: "LEY_DE_PRESUPUESTO",
-      entidad: "ITEMGASTOS", registroId: String(params.id), notificar: false,
-      detalle: `Consulta de ítems de gasto del marco ${params.id} (${query.origen}).`,
-    });
-    res.json(items);
+    res.json(await service.listar(params.id, query.origen));
   },
 
   async guardar(req: Request, res: Response) {

@@ -2,6 +2,10 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'DECRETO_HACIENDA_LISTADO'
+  | 'DECRETO_HACIENDA_CONSULTADO'
+  | 'DECRETO_HACIENDA_CREADO'
+  | 'DECRETO_HACIENDA_ACTUALIZADO'
   | 'MARCO_LISTADO'
   | 'MARCO_CONSULTADO'
   | 'MARCO_CREADO'

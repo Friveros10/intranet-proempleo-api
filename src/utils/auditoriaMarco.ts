@@ -1,29 +1,19 @@
 import type { MarcoProempleo } from '../models/MarcoProempleo.model';
 import type { MarcoDetalleProempleo } from '../models/MarcoDetalleProempleo.model';
 
-type Campos<T> = readonly (readonly [keyof T, string])[];
+import { diferenciasAuditables, valorAuditable, type CamposAuditables } from './auditoriaCambios';
 
-const camposMarco: Campos<MarcoProempleo> = [
+const camposMarco: CamposAuditables<MarcoProempleo> = [
   ['ano_mar', 'Año'], ['subtitulo_mar', 'Subtítulo'], ['item_mar', 'Ítem'],
   ['linea_mar', 'Subítem / Línea'], ['nombre_mar', 'Nombre'], ['monto_mar', 'Monto'],
   ['est_mar', 'Estado'], ['ema_mar', 'Correo'], ['tip_mar', 'Tipo'],
 ];
-const camposGlosa: Campos<MarcoDetalleProempleo> = [
+const camposGlosa: CamposAuditables<MarcoDetalleProempleo> = [
   ['glo_detmar', 'Código'], ['nom_detmar', 'Nombre'], ['acc_detmar', 'Acción'], ['mon_detmar', 'Monto'],
 ];
 
-function valor(texto: unknown): string {
-  return texto == null || texto === '' ? 'sin valor' : typeof texto === 'string' ? JSON.stringify(texto) : String(texto);
-}
-
-function diferencias<T>(antes: T, despues: T, campos: Campos<T>): string[] {
-  return campos.flatMap(([campo, nombre]) =>
-    antes[campo] === despues[campo] ? [] : [`${nombre} de ${valor(antes[campo])} a ${valor(despues[campo])}`],
-  );
-}
-
 function describirGlosa(estado: 'agregada' | 'eliminada', glosa: MarcoDetalleProempleo): string {
-  const datos = camposGlosa.map(([campo, nombre]) => `${nombre} ${valor(glosa[campo])}`);
+  const datos = camposGlosa.map(([campo, nombre]) => `${nombre} ${valorAuditable(glosa[campo])}`);
   return `Glosa ${glosa.corr_detmar} ${estado} (${datos.join(', ')})`;
 }
 
@@ -32,13 +22,13 @@ export function describirCambiosMarco(
   glosasAnteriores: readonly MarcoDetalleProempleo[],
   actualizado: MarcoProempleo & { detalles: readonly MarcoDetalleProempleo[] },
 ): string {
-  const cambios = diferencias(anterior, actualizado, camposMarco);
+  const cambios = diferenciasAuditables(anterior, actualizado, camposMarco);
   const anteriores = new Map(glosasAnteriores.map((glosa) => [glosa.corr_detmar, glosa]));
 
   for (const glosa of actualizado.detalles) {
     const previa = anteriores.get(glosa.corr_detmar);
     if (previa) {
-      const modificados = diferencias(previa, glosa, camposGlosa);
+      const modificados = diferenciasAuditables(previa, glosa, camposGlosa);
       if (modificados.length) cambios.push(`Glosa ${glosa.corr_detmar} modificada (${modificados.join(', ')})`);
       anteriores.delete(glosa.corr_detmar);
     } else {

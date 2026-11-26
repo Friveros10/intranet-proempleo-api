@@ -7,6 +7,10 @@ import {
   programasDecretoHaciendaSchema,
 } from "../validations/decretosHacienda.validation";
 import { AppError } from "../utils/AppError";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
+import { describirCambiosHacienda } from "../utils/auditoriaHacienda";
+
+const auditoria = { modulo: "DECRETOS_HACIENDA", entidad: "DECHACIENDA" };
 
 function usuario(req: Request) {
   if (!req.user || !/^\d{1,50}$/.test(req.user.sub))
@@ -37,10 +41,22 @@ export const decretosHaciendaController = {
   },
   async crear(req: Request, res: Response) {
     const { body } = guardarDecretoHaciendaSchema.parse({ body: req.body });
-    res.status(201).json(await service.crear(body, usuario(req)));
+    const usuarioId = usuario(req);
+    const decreto = await service.crear(body, usuarioId);
+    registrarAuditoriaOpcional({
+      ...auditoria, req, usuarioId, accion: "DECRETO_HACIENDA_CREADO", registroId: decreto.fol_dechac,
+      detalle: `Decreto de Hacienda ${decreto.fol_dechac} creado con ${decreto.detalles.length} detalles.`,
+    });
+    res.status(201).json(decreto);
   },
   async actualizar(req: Request, res: Response) {
     const { body } = guardarDecretoHaciendaSchema.parse({ body: req.body });
-    res.json(await service.actualizar(req.params.folio, body, usuario(req)));
+    const usuarioId = usuario(req);
+    const { decreto, anterior, detallesAnteriores } = await service.actualizar(req.params.folio, body, usuarioId);
+    registrarAuditoriaOpcional({
+      ...auditoria, req, usuarioId, accion: "DECRETO_HACIENDA_ACTUALIZADO", registroId: decreto.fol_dechac,
+      detalle: describirCambiosHacienda(anterior, detallesAnteriores, decreto),
+    });
+    res.json(decreto);
   },
 };
