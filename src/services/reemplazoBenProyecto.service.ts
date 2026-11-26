@@ -421,14 +421,12 @@ export const reemplazoBenProyectoService = {
     if (reemplazos.length !== ids.length) {
       throw new AppError("Uno o más candidatos no existen", 404);
     }
-    const cupos = new Set(
-      reemplazos.map((r) =>
-        r.idBeneficiarioProyecto === null
-          ? `${r.idProyecto}::cobertura::${r.fechaSolicitudReemplazo}`
-          : `${r.idProyecto}::${r.idBeneficiarioProyecto}`,
-      ),
+    const solicitudes = new Set(
+      reemplazos.map((r) => JSON.stringify([
+        r.idProyecto, r.idBeneficiarioProyecto, new Date(r.fechaSolicitudReemplazo).getTime(),
+      ])),
     );
-    if (cupos.size !== 1) {
+    if (solicitudes.size !== 1) {
       throw new AppError(
         "Todos los candidatos deben pertenecer al mismo reemplazo",
         400,
@@ -440,9 +438,7 @@ export const reemplazoBenProyectoService = {
       where: {
         idProyecto: referencia.idProyecto,
         idBeneficiarioProyecto: referencia.idBeneficiarioProyecto,
-        ...(referencia.idBeneficiarioProyecto === null
-          ? { fechaSolicitudReemplazo: referencia.fechaSolicitudReemplazo }
-          : {}),
+        fechaSolicitudReemplazo: referencia.fechaSolicitudReemplazo,
       },
     });
     if (candidatosDelCupo.some((row) => row.status !== "revisado")) {
