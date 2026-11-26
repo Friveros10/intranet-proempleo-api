@@ -10,7 +10,9 @@ import {
   programasOficioSchema,
 } from '../validations/oficioCobertura.validation';
 import { AppError } from '../utils/AppError';
+import { registrarAuditoriaOpcional } from '../utils/auditoriaOpcional';
 
+const modulo = 'OFICIO_COBERTURA';
 function usuario(req: Request) {
   if (!req.user || !/^\d{1,50}$/.test(req.user.sub)) throw new AppError('Sesión inválida', 401);
   return req.user.sub;
@@ -45,7 +47,14 @@ export const oficioCoberturaController = {
   },
   async crearOrdinario(req: Request, res: Response) {
     const { body } = crearOrdinarioSchema.parse({ body: req.body });
-    res.status(201).json(await service.crearOrdinario(body, usuario(req)));
+    const usuarioId = usuario(req);
+    const ordinario = await service.crearOrdinario(body, usuarioId);
+    registrarAuditoriaOpcional({
+      req, usuarioId, modulo, accion: 'OFICIO_COBERTURA_ORDINARIO_CREADO', entidad: 'ORDOFICOB',
+      registroId: ordinario.ord_ofi, region: body.cod_region,
+      detalle: `Oficio ${ordinario.ord_ofi} creado en ${ordinario.nom_region || `región ${body.cod_region}`}, período ${body.mes_desde}–${body.mes_hasta} de ${body.ano_ofi}.`,
+    });
+    res.status(201).json(ordinario);
   },
   async coberturas(req: Request, res: Response) {
     const { params } = folioOficioSchema.parse({ params: req.params });
@@ -53,6 +62,21 @@ export const oficioCoberturaController = {
   },
   async guardarCoberturas(req: Request, res: Response) {
     const { body } = guardarCoberturasSchema.parse({ body: req.body });
-    res.status(201).json(await service.guardarCoberturas(body));
+    const usuarioId = usuario(req);
+    const { coberturas, datosGuardados } = await service.guardarCoberturas(body);
+    const { periodo, periodoAgregado, folio, region } = datosGuardados;
+    const comunas = new Map(coberturas.map((cobertura) => [cobertura.cod_com, cobertura.nom_com]));
+    const agregadas = body.coberturas.map(({ cod_com, cod_ciu, jor_ofi, ben_ofi }) =>
+      `Comuna ${comunas.get(cod_com) || cod_com} (provincia ${cod_ciu}), jornada ${jor_ofi}, ${ben_ofi} cupos mensuales`,
+    );
+    const periodoTexto = `${periodo.mes_desde}–${periodo.mes_hasta} de ${periodo.ano_ofi}`;
+    registrarAuditoriaOpcional({
+      req, usuarioId, modulo, accion: 'OFICIO_COBERTURA_COBERTURAS_AGREGADAS', entidad: 'OFICIOCOB',
+      registroId: folio, region,
+      detalle: `Oficio ${folio}, programa ${body.corr_mar}, período ${periodoTexto}.` +
+        (periodoAgregado ? ' Se definió el período del oficio.' : '') +
+        ` Coberturas agregadas · ${agregadas.join(' · ')}.`,
+    });
+    res.status(201).json({ coberturas });
   },
 };

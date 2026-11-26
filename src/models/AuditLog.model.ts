@@ -2,6 +2,8 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'OFICIO_COBERTURA_ORDINARIO_CREADO'
+  | 'OFICIO_COBERTURA_COBERTURAS_AGREGADAS'
   | 'DECRETO_HACIENDA_LISTADO'
   | 'DECRETO_HACIENDA_CONSULTADO'
   | 'DECRETO_HACIENDA_CREADO'

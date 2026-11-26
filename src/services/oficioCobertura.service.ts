@@ -62,7 +62,7 @@ export const oficioCoberturaService = {
   },
 
   async guardarCoberturas(data: GuardarCoberturasInput) {
-    await sequelize.transaction(async (transaction) => {
+    const datosGuardados = await sequelize.transaction(async (transaction) => {
       const ordinario = await repository.buscarOrdinario(data.ord_ofi, transaction);
       if (!ordinario) throw new AppError('No existe un ordinario con ese folio', 404);
       if (ordinario.origen !== 'proempleo') {
@@ -109,7 +109,8 @@ export const oficioCoberturaService = {
       }
       if (!periodoGuardado) await repository.fijarPeriodo(data.ord_ofi, periodo, transaction);
       await repository.guardarCoberturas(data.ord_ofi, data, periodo, transaction);
+      return { periodo, periodoAgregado: !periodoGuardado, folio: ordinario.ord_ofi, region: ordinario.cod_region };
     });
-    return { coberturas: await repository.coberturas(data.ord_ofi) };
+    return { coberturas: await repository.coberturas(data.ord_ofi), datosGuardados };
   },
 };
