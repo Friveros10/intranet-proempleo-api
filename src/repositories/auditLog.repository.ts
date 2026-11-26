@@ -10,6 +10,7 @@ export interface RegistrarAuditoriaParams {
   registroId?: string | null;
   region?: number | null;
   detalle?: string;
+  notificar?: boolean;
   req: Request;
   transaction?: Transaction;
 }
@@ -35,7 +36,8 @@ function buildWhereNotificaciones(perfil: AuditPerfilNotificacion, regionUsuario
 }
 
 export const auditLogRepository = {
-  async registrar({ usuarioId, accion, modulo, entidad, registroId, region, detalle, req, transaction }: RegistrarAuditoriaParams): Promise<AuditLogModel> {
+  async registrar({ usuarioId, accion, modulo, entidad, registroId, region, detalle, notificar = true, req, transaction }: RegistrarAuditoriaParams): Promise<AuditLogModel> {
+    const estado = notificar ? 'pendiente' : 'vista';
     return AuditLogModel.create({
       usuarioId: usuarioId === null ? null : Number(usuarioId),
       accion,
@@ -47,9 +49,9 @@ export const auditLogRepository = {
       ip: req.ip ?? req.socket.remoteAddress ?? null,
       userAgent: req.get('user-agent') ?? null,
       detalle: detalle ?? null,
-      estadoAdmin: 'pendiente',
-      estadoMinisterio: 'pendiente',
-      estadoIntendencia: 'pendiente',
+      estadoAdmin: estado,
+      estadoMinisterio: estado,
+      estadoIntendencia: estado,
       fechaVistaAdmin: null,
       fechaVistaMinisterio: null,
       fechaVistaIntendencia: null,

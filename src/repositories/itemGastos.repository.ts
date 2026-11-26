@@ -24,7 +24,7 @@ export const itemGastosRepository = {
     usuario: string,
     transaction: Transaction,
   ) {
-    await sequelize.query(
+    const [creado] = await sequelize.query<{ corr_itemGas: number }>(
       insertarConCorrelativo(
         "ITEMGASTOS",
         "itemgastos_proempleo",
@@ -38,13 +38,14 @@ export const itemGastosRepository = {
         transaction,
       },
     );
+    return creado.corr_itemGas;
   },
 
   async eliminar(marco: number, id: number, transaction: Transaction) {
-    const [eliminado] = await sequelize.query<{ corr_itemGas: number }>(
+    const [eliminado] = await sequelize.query<Pick<ItemGasto, "corr_itemGas" | "nom_itemGas" | "categoria">>(
       `
       DELETE FROM dbo.[${ItemGastosProempleoModel.tableName}]
-      OUTPUT DELETED.corr_itemGas
+      OUTPUT DELETED.corr_itemGas, DELETED.nom_itemGas, DELETED.categoria
       WHERE corr_mar = :marco AND corr_itemGas = :id
         AND NOT EXISTS (SELECT 1 FROM dbo.PROITEMGAS WHERE corr_itemGas = :id)
         AND NOT EXISTS (SELECT 1 FROM dbo.proitemgas_proempleo WHERE corr_itemGas = :id)
@@ -53,6 +54,6 @@ export const itemGastosRepository = {
     `,
       { type: QueryTypes.SELECT, replacements: { marco, id }, transaction },
     );
-    return Boolean(eliminado);
+    return eliminado ?? null;
   },
 };

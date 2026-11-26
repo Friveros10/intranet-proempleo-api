@@ -46,11 +46,13 @@ export const marcoService = {
       }
       await marcoRepository.actualizar(id, data, usuario, transaction);
       const conservados = new Set(data.detalles.map((detalle) => detalle.corr_detmar));
-      await marcoRepository.eliminarDetalles(id, [...existentes].filter((idDetalle) => !conservados.has(idDetalle)), transaction);
+      const glosasEliminadas = [...existentes].filter((idDetalle) => !conservados.has(idDetalle));
+      await marcoRepository.eliminarDetalles(id, glosasEliminadas, transaction);
       for (const detalle of data.detalles) {
         await marcoRepository.guardarDetalle(id, data, detalle, usuario, transaction);
       }
-      return this.obtener(id, 'proempleo', transaction);
+      const marcoActualizado = await this.obtener(id, 'proempleo', transaction);
+      return { marco: marcoActualizado, anterior: marco, glosasAnteriores: detalles };
     });
   },
 };

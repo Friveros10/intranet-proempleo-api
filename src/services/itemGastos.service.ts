@@ -31,17 +31,23 @@ export const itemGastosService = {
       { isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE },
       async (transaction) => {
         await verificarMarco(marco, origen, transaction);
-        for (const item of data.nuevos)
-          await repository.crear(marco, item, usuario, transaction);
+        const idsCreados = new Set<number>();
+        for (const item of data.nuevos) {
+          idsCreados.add(await repository.crear(marco, item, usuario, transaction));
+        }
+        const eliminados = [];
         for (const id of data.eliminar) {
-          if (!(await repository.eliminar(marco, id, transaction))) {
+          const eliminado = await repository.eliminar(marco, id, transaction);
+          if (!eliminado) {
             throw new AppError(
               `El ítem ${id} está en uso o ya no está disponible para eliminar.`,
               409,
             );
           }
+          eliminados.push(eliminado);
         }
-        return repository.listar(marco, transaction);
+        const items = await repository.listar(marco, transaction);
+        return { items, creados: items.filter((item) => item.origen === "proempleo" && idsCreados.has(item.corr_itemGas)), eliminados };
       },
     );
   },

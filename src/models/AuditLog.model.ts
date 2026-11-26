@@ -2,6 +2,14 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'MARCO_LISTADO'
+  | 'MARCO_CONSULTADO'
+  | 'MARCO_CREADO'
+  | 'MARCO_ACTUALIZADO'
+  | 'MARCO_ITEMS_CONSULTADOS'
+  | 'MARCO_ITEMS_CREADOS'
+  | 'MARCO_ITEMS_ELIMINADOS'
+  | 'MARCO_ITEMS_ACTUALIZADOS'
   | 'FLUJO_REEMPLAZO_CONFIGURADO'
   | 'REEMPLAZO_INDIVIDUAL_CREADO'
   | 'REEMPLAZO_INDIVIDUAL_ESTADO'
