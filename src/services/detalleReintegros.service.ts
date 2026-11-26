@@ -9,7 +9,8 @@ async function buscarProyecto(decreto: string, folio: number, transaction?: Tran
   const proyecto = await detalleGastosRepository.buscarProyecto(decreto, folio, transaction);
   if (!proyecto) throw new AppError('No se encontró el proyecto asociado a este decreto.', 404);
   if (!proyecto.region || proyecto.region < 0) throw new AppError('El proyecto no tiene una región registrada.', 409);
-  return { folio: proyecto.folio, nombre: proyecto.nombre, region: proyecto.region, nombreRegion: proyecto.nombreRegion };
+  const { folio: folioProyecto, nombre, region, nombreRegion, nombreEjecutor } = proyecto;
+  return { folio: folioProyecto, nombre, region, nombreRegion, nombreEjecutor };
 }
 
 export const detalleReintegrosService = {

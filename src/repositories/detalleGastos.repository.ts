@@ -14,6 +14,7 @@ type ProyectoGasto = {
   nombre: string;
   region: number;
   nombreRegion: string | null;
+  nombreEjecutor: string | null;
   marco: number;
   origen: "legacy" | "proempleo";
 };
@@ -99,9 +100,9 @@ export const detalleGastosRepository = {
     const [proyecto] = await sequelize.query<ProyectoGasto>(
       `
       WITH proyectos AS (
-        SELECT fol_pro, nom_pro, reg_pro, corr_mar, est_pro, 'legacy' origen FROM dbo.PROYECTOS WHERE fol_pro = :folio
+        SELECT fol_pro, nom_pro, reg_pro, corr_mar, ruteje_pro, est_pro, 'legacy' origen FROM dbo.PROYECTOS WHERE fol_pro = :folio
         UNION ALL
-        SELECT fol_pro, nom_pro, reg_pro, corr_mar, est_pro, 'proempleo' FROM dbo.proyectos_proempleo WHERE fol_pro = :folio
+        SELECT fol_pro, nom_pro, reg_pro, corr_mar, ruteje_pro, est_pro, 'proempleo' FROM dbo.proyectos_proempleo WHERE fol_pro = :folio
       ), asociaciones AS (
         SELECT fol_pro, est_decpro FROM dbo.DECPRO WHERE fol_dec = :decreto
         UNION ALL SELECT fol_pro, est_decpro FROM dbo.decpro_proempleo WHERE fol_dec = :decreto
@@ -110,8 +111,16 @@ export const detalleGastosRepository = {
         UNION ALL SELECT est_dec FROM dbo.decretos_proempleo WHERE fol_dec = :decreto
       )
       SELECT TOP (1) p.fol_pro folio, RTRIM(p.nom_pro) nombre, p.reg_pro region,
-        RTRIM(r.Nom_region) nombreRegion, p.corr_mar marco, p.origen
+        RTRIM(r.Nom_region) nombreRegion, RTRIM(e.nom_eje) nombreEjecutor, p.corr_mar marco, p.origen
       FROM proyectos p LEFT JOIN dbo.REGIONES r ON r.cod_region = p.reg_pro
+      OUTER APPLY (
+        SELECT TOP (1) ejecutor.nom_eje FROM (
+          SELECT nom_eje, 'legacy' origen FROM dbo.EJECUTORES WHERE rut_eje = p.ruteje_pro
+          UNION ALL
+          SELECT nom_eje, 'proempleo' origen FROM dbo.ejecutores_proempleo WHERE rut_eje = p.ruteje_pro
+        ) ejecutor
+        ORDER BY CASE WHEN ejecutor.origen = p.origen THEN 0 ELSE 1 END
+      ) e
       WHERE ISNULL(p.est_pro, '') <> 'ELIMINADO'
         AND EXISTS (SELECT 1 FROM asociaciones a WHERE a.fol_pro = p.fol_pro AND ISNULL(a.est_decpro, '') <> 'ELIMINADO')
         AND EXISTS (SELECT 1 FROM decretos WHERE ISNULL(est_dec, '') <> 'ELIMINADO')
