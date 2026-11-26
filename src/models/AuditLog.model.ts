@@ -2,6 +2,8 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'POSTERGACION_LISTADO_CREADA'
+  | 'POSTERGACION_LISTADO_ANULADA'
   | 'OFICIO_COBERTURA_ORDINARIO_CREADO'
   | 'OFICIO_COBERTURA_COBERTURAS_AGREGADAS'
   | 'DECRETO_HACIENDA_LISTADO'

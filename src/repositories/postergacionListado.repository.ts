@@ -104,10 +104,12 @@ export const postergacionListadoRepository = {
   },
 
   async anular(id: number, usuario: string) {
-    const rows = await sequelize.query<{ id: number }>(
+    const rows = await sequelize.query<Omit<Postergacion, "observacion"> & { id: number }>(
       `
       UPDATE dbo.benpropos_proempleo SET est_benpropos = 'ANULADO', usu_eli = :usuario, fec_elli = GETDATE()
-      OUTPUT INSERTED.id_benpropos AS id
+      OUTPUT INSERTED.id_benpropos AS id, RTRIM(INSERTED.fol_dec) AS folio,
+        INSERTED.mes_benpropos AS mes, INSERTED.ano_benpropos AS anio,
+        CONVERT(char(10), INSERTED.fec_benpropos, 23) AS fecha
       WHERE id_benpropos = :id AND est_benpropos = 'ACTIVO'
     `,
       { replacements: { id, usuario }, type: QueryTypes.SELECT },

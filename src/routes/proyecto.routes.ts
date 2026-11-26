@@ -12,6 +12,7 @@ import {
   plazoOrdinario,
 } from "../repositories/postergacionListado.repository";
 import { AppError } from "../utils/AppError";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
 import {
   catalogoPorComunaSchema,
   eliminarProyectoSchema,
@@ -51,6 +52,7 @@ router.get(
 const admin = requireRoles("ADMIN", "MINISTERIO", "INTENDENCIA");
 router.use(admin, asyncHandler(limitarRegionProyectos));
 const administrarPostergaciones = requireRoles("ADMIN", "MINISTERIO");
+const auditoriaPostergaciones = { modulo: "POSTERGACION_LISTADO", entidad: "BENPROPOS" };
 router.get(
   "/postergaciones/decretos",
   administrarPostergaciones,
@@ -72,7 +74,8 @@ router.post(
   administrarPostergaciones,
   asyncHandler(async (req, res) => {
     const datos = guardarPostergacionSchema.parse(req.body);
-    if (datos.fecha <= plazoOrdinario(datos.anio, datos.mes)) {
+    const plazo = plazoOrdinario(datos.anio, datos.mes);
+    if (datos.fecha <= plazo) {
       throw new AppError(
         "La fecha debe ser posterior al día 15 del mes siguiente al período de ejecución",
         400,
@@ -84,6 +87,11 @@ router.post(
     );
     if (!registro)
       throw new AppError("El decreto debe estar vinculado a un proyecto", 404);
+    registrarAuditoriaOpcional({
+      ...auditoriaPostergaciones, req, usuarioId: req.user!.sub,
+      accion: "POSTERGACION_LISTADO_CREADA", registroId: String(registro.id),
+      detalle: `Decreto ${datos.folio}, período de ejecución ${datos.mes}/${datos.anio}. Plazo ordinario ${plazo}, fecha límite registrada ${datos.fecha}. Observación ${JSON.stringify(datos.observacion)}.`,
+    });
     res.status(201).json(registro);
   }),
 );
@@ -98,7 +106,12 @@ router.delete(
     );
     if (!registro)
       throw new AppError("Postergación ProEmpleo activa no encontrada", 404);
-    res.json(registro);
+    registrarAuditoriaOpcional({
+      ...auditoriaPostergaciones, req, usuarioId: req.user!.sub,
+      accion: "POSTERGACION_LISTADO_ANULADA", registroId: String(registro.id),
+      detalle: `Decreto ${registro.folio}, período de ejecución ${registro.mes}/${registro.anio}, fecha límite de la postergación ${registro.fecha}. Estado de ACTIVO a ANULADO.`,
+    });
+    res.json({ id: registro.id });
   }),
 );
 router.get(
