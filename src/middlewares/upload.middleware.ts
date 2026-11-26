@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import multer, { FileFilterCallback } from 'multer';
 import { ErrorRequestHandler, Request } from 'express';
@@ -11,21 +12,6 @@ if (!fs.existsSync(UPLOADS_ROOT)) {
   fs.mkdirSync(UPLOADS_ROOT, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination(req: Request, _file, cb) {
-    const idReemplazo = req.body.idReemplazoBenProyecto;
-    const carpetaReemplazo = path.join(UPLOADS_ROOT, String(idReemplazo));
-    if (!fs.existsSync(carpetaReemplazo)) {
-      fs.mkdirSync(carpetaReemplazo, { recursive: true });
-    }
-    cb(null, carpetaReemplazo);
-  },
-  filename(_req, file, cb) {
-    const nombreUnico = `${Date.now()}-${file.originalname}`;
-    cb(null, nombreUnico);
-  },
-});
-
 function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCallback) {
   if (file.mimetype !== 'application/pdf') {
     cb(new AppError('Todos los documentos deben cargarse en formato PDF', 400));
@@ -36,8 +22,6 @@ function fileFilter(_req: Request, file: Express.Multer.File, cb: FileFilterCall
 
 export const MAX_PDF_REEMPLAZO_BYTES = 10 * 1024 * 1024;
 const limits = { fileSize: MAX_PDF_REEMPLAZO_BYTES };
-
-export const uploadDocumentoReemplazo = multer({ storage, fileFilter, limits });
 
 // Almacenamiento en memoria: se usa cuando aún no existe el id del reemplazo
 // (se crea solicitud + beneficiario + documentos en una sola petición) y los
@@ -52,12 +36,12 @@ export const errorCargaDocumentoReemplazo: ErrorRequestHandler = (err, _req, _re
   next(err);
 };
 
-export function guardarDocumentoEnDisco(idReemplazo: number, file: Express.Multer.File): string {
+export function guardarDocumentoEnDisco(idReemplazo: number, file: Express.Multer.File, nombreArchivo: string): string {
   const carpetaReemplazo = path.join(UPLOADS_ROOT, String(idReemplazo));
   if (!fs.existsSync(carpetaReemplazo)) {
     fs.mkdirSync(carpetaReemplazo, { recursive: true });
   }
-  const nombreUnico = `${Date.now()}-${file.originalname}`;
+  const nombreUnico = `${randomUUID()}-${nombreArchivo}`;
   fs.writeFileSync(path.join(carpetaReemplazo, nombreUnico), file.buffer);
   return `/uploads/reemplazos/${idReemplazo}/${nombreUnico}`;
 }

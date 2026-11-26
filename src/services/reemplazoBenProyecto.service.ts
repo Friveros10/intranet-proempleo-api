@@ -16,6 +16,7 @@ import { parseRut } from "../utils/rut";
 import {
   DOCUMENTOS_REEMPLAZO,
   esDocumentoReemplazoValido,
+  nombreDocumentoReemplazo,
 } from "../constants/documentosReemplazo";
 import { guardarDocumentoEnDisco } from "../middlewares/upload.middleware";
 import {
@@ -312,15 +313,17 @@ export const reemplazoBenProyectoService = {
       });
       // console.log("[reemplazoBenProyectoService.crear] reemplazo creado con id:", reemplazo.id);
       for (const documento of documentosPorRut.get(candidato.cuerpo) ?? []) {
+        const nombreArchivo = nombreDocumentoReemplazo(documento.idDocumento);
         const archivoUrl = guardarDocumentoEnDisco(
           reemplazo.id,
           documento.archivo,
+          nombreArchivo,
         );
         await docReemplazoBenProyectoRepository.create({
           idReemplazoBenProyecto: reemplazo.id,
           idDocumento: documento.idDocumento,
           idBeneficiario: candidato.cuerpo,
-          nombreArchivo: documento.archivo.originalname,
+          nombreArchivo,
           archivoUrl,
         });
       }

@@ -14,7 +14,7 @@ import type { CrearReemplazoIndividualInput } from "../validations/flujoReemplaz
 import type { ActualizarChecklistReemplazoInput } from "../validations/reemplazoBenProyecto.validation";
 import { planEgresoHistoricoService } from "./planEgresoHistorico.service";
 import { CAMPOS_CHECKLIST_REEMPLAZO, puedeGestionarChecklist } from "../constants/checklist.constants";
-import { DOCUMENTOS_REEMPLAZO } from "../constants/documentosReemplazo";
+import { DOCUMENTOS_REEMPLAZO, nombreDocumentoReemplazo } from "../constants/documentosReemplazo";
 import { guardarDocumentoIndividual, eliminarDocumentoIndividual } from "../utils/documentosReemplazoIndividual";
 import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
@@ -191,7 +191,7 @@ export const flujoReemplazoService = {
           urls.push(archivoUrl);
           await repository.crearDocumento({
             idReemplazoBenProyecto: solicitud.id, idDocumento: data.documentos[i].idDocumento,
-            idBeneficiario: cuerpo, nombreArchivo: archivos[i].originalname, archivoUrl,
+            idBeneficiario: cuerpo, nombreArchivo: nombreDocumentoReemplazo(data.documentos[i].idDocumento), archivoUrl,
             status: "pendiente", comentarioRechazo: null, fechaCarga: new Date().toISOString(),
           }, transaction);
         }
@@ -311,7 +311,7 @@ export const flujoReemplazoService = {
     try {
       await sequelize.transaction(async (transaction) => {
         await repository.actualizarDocumento(id, {
-          archivoUrl, nombreArchivo: archivo.originalname, status: "pendiente",
+          archivoUrl, nombreArchivo: nombreDocumentoReemplazo(doc.idDocumento), status: "pendiente",
           comentarioRechazo: null, fechaCarga: new Date().toISOString(),
         }, transaction);
         await auditar(req, rut, "DOCUMENTO_INDIVIDUAL_REEMPLAZADO", row.id, row.proyecto?.reg_pro ?? null, `Documento ${id} reemplazado`, transaction);

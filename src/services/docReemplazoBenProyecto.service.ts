@@ -5,7 +5,8 @@ import { obtenerProyectoReemplazo } from "./reemplazoBenProyecto.service";
 import { auditLogRepository } from "../repositories/auditLog.repository";
 import { beneficiarioRepository } from "../repositories/sicap/beneficiario.repository";
 import { AppError } from "../utils/AppError";
-import { esDocumentoReemplazoValido } from "../constants/documentosReemplazo";
+import { nombreDocumentoReemplazo } from "../constants/documentosReemplazo";
+import { eliminarDocumentoEnDisco, guardarDocumentoEnDisco } from "../middlewares/upload.middleware";
 import { CrearDocReemplazoInput } from "../validations/docReemplazoBenProyecto.validation";
 import { DocumentoStatus } from "../models/DocReemplazoBenProyecto.model";
 
@@ -30,16 +31,11 @@ export const docReemplazoBenProyectoService = {
 
   async crear(
     data: CrearDocReemplazoInput,
-    archivo: { nombreArchivo: string; archivoUrl: string },
+    archivo: Express.Multer.File,
     rutUsuario: number,
     req: Request,
   ) {
-    if (!esDocumentoReemplazoValido(data.idDocumento)) {
-      throw new AppError(
-        "idDocumento no corresponde a un documento válido",
-        400,
-      );
-    }
+    const nombreArchivo = nombreDocumentoReemplazo(data.idDocumento);
 
     const [reemplazo, beneficiario] = await Promise.all([
       reemplazoBenProyectoRepository.findById(data.idReemplazoBenProyecto),
@@ -53,9 +49,12 @@ export const docReemplazoBenProyectoService = {
       throw new AppError("El beneficiario no existe", 404);
     }
 
+    const archivoUrl = guardarDocumentoEnDisco(data.idReemplazoBenProyecto, archivo, nombreArchivo);
     const documento = await docReemplazoBenProyectoRepository.create({
-      ...data,
-      ...archivo,
+      ...data, nombreArchivo, archivoUrl,
+    }).catch((err) => {
+      eliminarDocumentoEnDisco(archivoUrl);
+      throw err;
     });
     await auditLogRepository.registrar({
       usuarioId: rutUsuario,
@@ -114,8 +113,7 @@ export const docReemplazoBenProyectoService = {
 
   async reemplazarArchivo(
     id: number,
-    nombreArchivo: string,
-    archivoUrl: string,
+    archivo: Express.Multer.File,
     rutUsuario: number,
     req: Request,
   ) {
@@ -130,12 +128,18 @@ export const docReemplazoBenProyectoService = {
     const reemplazo = await reemplazoBenProyectoRepository.findById(
       documento.idReemplazoBenProyecto,
     );
+    const nombreArchivo = nombreDocumentoReemplazo(documento.idDocumento);
+    const archivoUrl = guardarDocumentoEnDisco(documento.idReemplazoBenProyecto, archivo, nombreArchivo);
     const reemplazado =
       await docReemplazoBenProyectoRepository.reemplazarArchivo(
         id,
         nombreArchivo,
         archivoUrl,
-      );
+      ).catch((err) => {
+        eliminarDocumentoEnDisco(archivoUrl);
+        throw err;
+      });
+    if (!reemplazado) eliminarDocumentoEnDisco(archivoUrl);
     if (reemplazado) {
       await auditLogRepository.registrar({
         usuarioId: rutUsuario,
