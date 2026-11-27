@@ -2,6 +2,8 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'CONDOC_CREADO'
+  | 'CONDOC_ESTADO_ACTUALIZADO'
   | 'INTERMEDIARIO_CREADO'
   | 'INTERMEDIARIO_ACTUALIZADO'
   | 'INTERMEDIARIO_RESPONSABLE_CREADO'

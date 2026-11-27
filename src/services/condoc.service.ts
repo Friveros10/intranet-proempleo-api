@@ -88,7 +88,7 @@ export const condocService = {
       await repository.actualizarEstado(id, siguiente, usuario, transaction);
       const actualizado = await repository.obtener(id, 'proempleo', transaction);
       if (!actualizado) throw new AppError('No se pudo leer el documento actualizado', 500);
-      return actualizado;
+      return { anterior: documento, actualizado };
     });
   },
 };

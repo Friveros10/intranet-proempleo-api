@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const TIPOS_CONDOC = ['Archivador', 'caja Memphis', 'Sobre sellado'] as const;
+export const TIPOS_CONDOC = ['Archivador', 'Caja Memphis', 'Sobre sellado'] as const;
 export const ESTADOS_CONDOC = ['Gestion', 'Archivado', 'Enviado'] as const;
 
 const id = z.coerce.number().int().positive().max(2147483647);
