@@ -160,11 +160,17 @@ export const detalleGastosRepository = {
   async obtenerProempleo(id: number, transaction?: Transaction) {
     const [gasto] = await sequelize.query<{
       folio: number; item: number | null; monto: string; asiento: boolean; origen: ProyectoGasto["origen"];
+      decreto: string; mes: number; anio: number; region: number | null;
+      nombreItem: string | null; glosa: string | null; fecfac_detren: string | null; estado: string | null;
     }>(`
       SELECT r.fol_pro folio, r.corr_itemgas item, CONVERT(VARCHAR(40), r.mon_detren) monto,
+        RTRIM(r.fol_dec) decreto, r.mes_detren mes, r.ano_detren anio, r.cod_region region,
+        RTRIM(i.nom_itemGas) nombreItem, RTRIM(r.glo_detren) glosa,
+        CONVERT(CHAR(10), r.fecfac_detren, 23) fecfac_detren, RTRIM(r.est_detren) estado,
         CONVERT(BIT, CASE WHEN r.EstApr_detren = :marca THEN 1 ELSE 0 END) asiento,
         CASE WHEN p.fol_pro IS NULL THEN 'legacy' ELSE 'proempleo' END origen
       FROM ${tablaNueva} r LEFT JOIN dbo.proyectos_proempleo p ON p.fol_pro = r.fol_pro
+      LEFT JOIN dbo.itemgastos_unificados i ON i.corr_itemGas = r.corr_itemgas
       WHERE r.corr_detren = :id AND NULLIF(RTRIM(r.fol_dec), '') IS NOT NULL
         AND r.fol_dec <> '00000000' AND ISNULL(r.est_detren, '') <> 'ELIMINADO'
     `, { type: QueryTypes.SELECT, replacements: { id, marca: marcaAsiento }, transaction });

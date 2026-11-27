@@ -77,10 +77,18 @@ export const detalleReintegrosRepository = {
   },
 
   async cambiar(id: number, data: EditarReintegroInput | null, usuario: string) {
-    const [actualizado] = await sequelize.query<{ correlativo: number }>(`
+    const [actualizado] = await sequelize.query<{
+      correlativo: number; folio: number; decreto: string; mes: number; anio: number; region: number | null;
+      montoAnterior: string; monto: string; ordinarioAnterior: string | null; ordinario: string | null;
+      estadoAnterior: string | null; estado: string | null;
+    }>(`
       UPDATE ${tablaNueva}
       SET usu_mod = :usuario, ${data ? 'mon_detrei = :monto, ord_detrei = :ordinario' : "est_detrei = 'ELIMINADO', fec_eli = GETDATE()"}
-      OUTPUT INSERTED.corr_detrei correlativo
+      OUTPUT INSERTED.corr_detrei correlativo, INSERTED.fol_pro folio, RTRIM(INSERTED.fol_dec) decreto,
+        INSERTED.mes_detrei mes, INSERTED.ano_detrei anio, INSERTED.cod_region region,
+        CONVERT(VARCHAR(40), DELETED.mon_detrei) montoAnterior, CONVERT(VARCHAR(40), INSERTED.mon_detrei) monto,
+        RTRIM(DELETED.ord_detrei) ordinarioAnterior, RTRIM(INSERTED.ord_detrei) ordinario,
+        RTRIM(DELETED.est_detrei) estadoAnterior, RTRIM(INSERTED.est_detrei) estado
       WHERE corr_detrei = :id AND ISNULL(est_detrei, '') <> 'ELIMINADO'
     `, { type: QueryTypes.SELECT, replacements: { id, usuario, ...data } });
     return actualizado ?? null;

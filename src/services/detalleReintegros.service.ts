@@ -21,7 +21,8 @@ export const detalleReintegrosService = {
   crear(data: CrearReintegroInput, usuario: string) {
     return sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, async (transaction) => {
       const proyecto = await buscarProyecto(data.decreto, data.folio, transaction);
-      return repository.crear(data, proyecto.region, usuario, transaction);
+      const resultado = await repository.crear(data, proyecto.region, usuario, transaction);
+      return { resultado, region: proyecto.region };
     });
   },
   async cambiar(id: number, data: EditarReintegroInput | null, usuario: string) {

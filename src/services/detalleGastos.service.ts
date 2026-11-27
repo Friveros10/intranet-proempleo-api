@@ -46,7 +46,8 @@ async function cambiarGasto(id: number, data: EditarDetalleGastoInput | null, us
       (gasto.item === null || !await repository.ajustarAcumulado(gasto.folio, gasto.item, String(diferencia), transaction))) {
       throw new AppError("No se pudo ajustar el gasto acumulado del ítem.", 409);
     }
-    return repository.cambiar(id, data, usuario, transaction);
+    const resultado = await repository.cambiar(id, data, usuario, transaction);
+    return { resultado, anterior: gasto };
   });
 }
 
@@ -81,7 +82,8 @@ export const detalleGastosService = {
             409,
           );
         }
-        return repository.crear(data, proyecto, item, usuario, transaction);
+        const resultado = await repository.crear(data, proyecto, item, usuario, transaction);
+        return { resultado, region: proyecto.region, nombreItem: item.nombre };
       },
     );
   },
