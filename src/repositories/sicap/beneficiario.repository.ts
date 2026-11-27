@@ -1,4 +1,4 @@
-import { IncludeOptions, Op, QueryTypes, Transaction, WhereOptions } from "sequelize";
+import { IncludeOptions, Op, QueryTypes, TableHints, Transaction, WhereOptions } from "sequelize";
 import {
   Beneficiario,
   BeneficiarioModel,
@@ -555,25 +555,27 @@ export const beneficiarioRepository = {
   },
 
   // BENEFICIARIOS es historica: las escrituras solo usan beneficiarios_proempleo.
-  async eliminar(rut_ben: number, usu_eli: string): Promise<number> {
-    await this.findProempleoEditable(rut_ben);
+  async eliminar(rut_ben: number, usu_eli: string, transaction: Transaction): Promise<number> {
     const [afectadosProempleo] = await BeneficiarioProempleoModel.update(
       {
         status: -1,
         usuarioEliminacion: usu_eli,
         fechaEliminacion: sequelize.fn("GETDATE") as unknown as Date,
       },
-      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } } },
+      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } }, transaction },
     );
     return afectadosProempleo;
   },
 
-  async findProempleoEditable(rut_ben: number): Promise<BeneficiarioProempleoModel> {
-    const proempleo = await BeneficiarioProempleoModel.findOne({
+  async findProempleoEditable(rut_ben: number, transaction: Transaction): Promise<BeneficiarioProempleoModel> {
+    const opciones = {
       where: { rutBeneficiario: rut_ben },
-    });
+      tableHint: TableHints.UPDLOCK,
+      transaction,
+    };
+    const proempleo = await BeneficiarioProempleoModel.findOne(opciones);
     if (!proempleo) {
-      const historico = await BeneficiarioModel.findByPk(rut_ben);
+      const historico = await BeneficiarioModel.findByPk(rut_ben, { transaction });
       if (historico) {
         throw new AppError("Los beneficiarios historicos son de solo lectura", 403);
       }
@@ -586,11 +588,8 @@ export const beneficiarioRepository = {
     rut_ben: number,
     data: CompletarFichaBeneficiarioInput,
     usu_mod: string,
+    transaction: Transaction,
   ): Promise<void> {
-    const proempleo = await this.findProempleoEditable(rut_ben);
-    if (proempleo.status <= 0) {
-      throw new AppError("El beneficiario ya se encuentra eliminado", 409);
-    }
     const [afectados] = await BeneficiarioProempleoModel.update(
       {
         idCiudad: data.ciudad,
@@ -604,7 +603,7 @@ export const beneficiarioRepository = {
         usuarioModificacion: usu_mod,
         fechaModificacion: sequelize.fn("GETDATE") as unknown as Date,
       },
-      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } } },
+      { where: { rutBeneficiario: rut_ben, status: { [Op.gt]: 0 } }, transaction },
     );
     if (afectados === 0) {
       throw new AppError("El beneficiario ya se encuentra eliminado", 409);

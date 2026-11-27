@@ -5,7 +5,9 @@ import {
 } from "../repositories/sicap/beneficiario.repository";
 import { proyectoRepository } from "../repositories/sicap/proyecto.repository";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
-import { auditLogRepository } from "../repositories/auditLog.repository";
+import { sequelize } from "../database/sequelize";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
+import { diferenciasAuditables } from "../utils/auditoriaCambios";
 import { ProyectoModel } from "../models/Proyecto.model";
 import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
@@ -80,7 +82,7 @@ export const beneficiarioService = {
       { ...data, rut_ben, dig_ben },
       String(rutUsuario),
     );
-    await auditLogRepository.registrar({
+    registrarAuditoriaOpcional({
       usuarioId: rutUsuario,
       accion: "BENEFICIARIO_CREADO",
       modulo: "BENEFICIARIOS",
@@ -95,27 +97,23 @@ export const beneficiarioService = {
 
   async eliminar(rutFormateado: string, rutUsuario: number, req: Request) {
     const rut = limpiarRut(rutFormateado);
-    const beneficiario = await beneficiarioRepository.findListadoByRut(rut);
-    if (!beneficiario) {
-      throw new AppError("Beneficiario no encontrado", 404);
-    }
+    const beneficiario = await sequelize.transaction(async (transaction) => {
+      const anterior = await beneficiarioRepository.findProempleoEditable(rut, transaction);
+      const afectados = await beneficiarioRepository.eliminar(rut, String(rutUsuario), transaction);
+      if (afectados === 0) {
+        throw new AppError("El beneficiario no está activo", 409);
+      }
+      return anterior;
+    });
 
-    const afectados = await beneficiarioRepository.eliminar(
-      rut,
-      String(rutUsuario),
-    );
-    if (afectados === 0) {
-      throw new AppError("El beneficiario ya se encuentra eliminado", 409);
-    }
-
-    await auditLogRepository.registrar({
+    registrarAuditoriaOpcional({
       usuarioId: rutUsuario,
       accion: "BENEFICIARIO_ELIMINADO",
       modulo: "BENEFICIARIOS",
       entidad: "BENEFICIARIOS",
       registroId: String(rut),
-      region: beneficiario.reg_ben,
-      detalle: `Beneficiario eliminado: ${beneficiario.nom_ben} ${beneficiario.pat_ben}`,
+      region: beneficiario.idRegion,
+      detalle: `Baja lógica del beneficiario ${rut}. Estado de ${beneficiario.status} a -1 (eliminado).`,
       req,
     });
   },
@@ -133,20 +131,30 @@ export const beneficiarioService = {
     }
 
     const rut = limpiarRut(rutFormateado);
-    const beneficiario = await beneficiarioRepository.findByRut(rut);
-    if (!beneficiario) {
-      throw new AppError("Beneficiario no encontrado", 404);
-    }
-
-    await beneficiarioRepository.completarFicha(rut, data, String(rutUsuario));
-    await auditLogRepository.registrar({
+    const { anterior, actualizado } = await sequelize.transaction(async (transaction) => {
+      const anterior = await beneficiarioRepository.findProempleoEditable(rut, transaction);
+      await beneficiarioRepository.completarFicha(rut, data, String(rutUsuario), transaction);
+      const actualizado = await beneficiarioRepository.findProempleoEditable(rut, transaction);
+      return { anterior, actualizado };
+    });
+    const cambios = diferenciasAuditables(anterior, actualizado, [
+      ["idRegion", "Región"],
+      ["idCiudad", "Provincia"],
+      ["idComuna", "Comuna"],
+      ["direccion", "Dirección"],
+      ["telefono", "Teléfono"],
+      ["celular", "Celular"],
+      ["email", "Correo electrónico"],
+      ["statusFicha", "Estado de ficha"],
+    ]);
+    registrarAuditoriaOpcional({
       usuarioId: rutUsuario,
       accion: "BENEFICIARIO_FICHA_COMPLETADA",
       modulo: "BENEFICIARIOS",
       entidad: "BENEFICIARIOS",
       registroId: String(rut),
-      region: data.region,
-      detalle: `Ficha completada para beneficiario ${rut}`,
+      region: actualizado.idRegion,
+      detalle: cambios.join(" · ") || "Ficha guardada sin cambios.",
       req,
     });
     return beneficiarioRepository.findListadoByRut(rut);
