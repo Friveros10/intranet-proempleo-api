@@ -5,7 +5,8 @@ import { DocumentoAuditoriaModel, type DocumentoAuditoria } from "../models/Docu
 import { documentoAuditoriaRepository } from "../repositories/documentoAuditoria.repository";
 import { usuarioSicapRepository } from "../repositories/sicap/usuarioSicap.repository";
 import { regionRepository } from "../repositories/sicap/region.repository";
-import { auditLogRepository } from "../repositories/auditLog.repository";
+import type { AuditAccion } from "../models/AuditLog.model";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
 import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
 import {
@@ -23,6 +24,22 @@ import {
   EstadoDocumentoAuditoriaInput,
 } from "../validations/documentoAuditoria.validation";
 import { AuditoriaBioBioModel } from "../models/AuditoriaBioBio.model";
+
+async function transaccionAuditable<T>(
+  req: Request,
+  operacion: (transaction: Transaction, auditar: (doc: DocumentoAuditoriaModel, accion: AuditAccion, detalle: string) => void) => Promise<T>,
+): Promise<T> {
+  const auditorias: Parameters<typeof registrarAuditoriaOpcional>[0][] = [];
+  const resultado = await sequelize.transaction((transaction) => operacion(transaction, (doc, accion, detalle) => {
+    auditorias.push({
+      req, accion, detalle, usuarioId: Number(req.user!.sub),
+      registroId: String(doc.id), region: doc.idRegion,
+      modulo: "DOCUMENTOS_AUDITORIA", entidad: "documentos_auditoria",
+    });
+  }));
+  for (const auditoria of auditorias) registrarAuditoriaOpcional(auditoria);
+  return resultado;
+}
 
 async function regionPerfil(req: Request): Promise<number> {
   const usuario = await usuarioSicapRepository.findByRut(Number(req.user!.sub));
@@ -54,44 +71,31 @@ export const documentoAuditoriaService = {
     tipo: TipoDocumentoAuditoria,
     body: { status: "subidos" },
     req: Request,
-    transaction?: Transaction,
   ): Promise<DocumentoAuditoriaModel> {
-    if (!transaction) {
-      return sequelize.transaction((tx) =>
-        documentoAuditoriaService.actualizarEstadoUpload(id, tipo, body, req, tx),
-      );
-    }
-    const documento = await obtenerVisible(id, req, transaction);
-    const campos = DOCUMENTOS_AUDITORIA[tipo];
-    if (documento.idRegion !== (await regionPerfil(req))) {
+    return transaccionAuditable(req, async (transaction, auditar) => {
+      const documento = await obtenerVisible(id, req, transaction);
+      const campos = DOCUMENTOS_AUDITORIA[tipo];
+      if (documento.idRegion !== (await regionPerfil(req))) {
       throw new AppError("Solo puede cargar documentos en la región de su perfil", 403);
-    }
-    const url = documento.getDataValue(campos.url);
-    if (!url) {
+      }
+      const url = documento.getDataValue(campos.url);
+      if (!url) {
       throw new AppError("Debe subir el documento antes de cambiar su estado", 409);
-    }
-    if (documento.getDataValue(campos.estado) !== "pendiente") {
+      }
+      if (documento.getDataValue(campos.estado) !== "pendiente") {
       throw new AppError("Solo un documento pendiente puede cambiar a subidos", 409);
-    }
-    const [actualizados] = await DocumentoAuditoriaModel.update(
-      { [campos.estado]: body.status, updated_usr: Number(req.user!.sub) },
-      { where: { id, [campos.estado]: "pendiente", [campos.url]: url }, transaction },
-    );
-    if (!actualizados) {
-      throw new AppError("El documento fue modificado; vuelva a cargar la ficha", 409);
-    }
-    await auditLogRepository.registrar({
-      entidad: "documentos_auditoria",
-      registroId: String(id),
-      accion: "DOCUMENTO_CARGADO",
-      usuarioId: Number(req.user!.sub),
-      modulo: "DOCUMENTOS_AUDITORIA",
-      region: documento.idRegion,
-      detalle: `${campos.label}: ${body.status}`,
-      req,
-      transaction,
+      }
+      const [actualizados] = await DocumentoAuditoriaModel.update(
+        { [campos.estado]: body.status, updated_usr: Number(req.user!.sub) },
+        { where: { id, [campos.estado]: "pendiente", [campos.url]: url }, transaction },
+      );
+      if (!actualizados) {
+        throw new AppError("El documento fue modificado; vuelva a cargar la ficha", 409);
+      }
+      auditar(documento, "DOCUMENTO_CARGADO",
+        `${campos.label}. Estado de pendiente a ${body.status}.`);
+      return documento.reload({ transaction });
     });
-    return documento.reload({ transaction });
   },
   async catalogos(req: Request) {
     const usuario = await usuarioSicapRepository.findByRut(
@@ -140,7 +144,7 @@ export const documentoAuditoriaService = {
     const usuario = Number(req.user!.sub);
     const escritos: { id: number; url: string }[] = [];
     try {
-      return await sequelize.transaction(async (transaction) => {
+      return await transaccionAuditable(req, async (transaction, auditar) => {
         const doc = await DocumentoAuditoriaModel.create(
           {
             RUT: rut.cuerpo,
@@ -176,18 +180,8 @@ export const documentoAuditoriaService = {
           { certCotizacionesUrl, liquidacionUrl },
           { transaction },
         );
-        await auditLogRepository.registrar({
-          usuarioId: usuario,
-          accion: "DOCUMENTO_CARGADO",
-          modulo: "DOCUMENTOS_AUDITORIA",
-          entidad: "documentos_auditoria",
-          registroId: String(doc.id),
-          region: idRegion,
-          detalle:
-            "Ficha de auditoría creada con certificado de cotizaciones y liquidación",
-          req,
-          transaction,
-        });
+        auditar(doc, "DOCUMENTO_CARGADO",
+          "Carga inicial de certificado de cotizaciones y liquidación. Ambos quedan pendientes de revisión.");
         return doc;
       });
     } catch (error) {
@@ -203,10 +197,11 @@ export const documentoAuditoriaService = {
     data: EstadoDocumentoAuditoriaInput,
     req: Request,
   ) {
-    return sequelize.transaction(async (transaction) => {
+    return transaccionAuditable(req, async (transaction, auditar) => {
       const doc = await obtenerVisible(id, req, transaction);
       const campos = DOCUMENTOS_AUDITORIA[tipo];
       const url = doc.getDataValue(campos.url);
+      const estadoAnterior = doc.getDataValue(campos.estado);
       if (!url) {
         throw new AppError("Debe subir el documento antes de revisarlo", 409);
       }
@@ -220,7 +215,7 @@ export const documentoAuditoriaService = {
         {
           where: {
             id,
-            [campos.estado]: { [Op.in]: ["pendiente", "subidos"] },
+            [Op.and]: [{ [campos.estado]: estadoAnterior }, { [campos.estado]: { [Op.in]: ["pendiente", "subidos"] } }],
             [campos.url]: url,
           },
           transaction,
@@ -228,20 +223,10 @@ export const documentoAuditoriaService = {
       );
       if (!actualizados)
         throw new AppError("Solo se pueden revisar documentos pendientes", 409);
-      await auditLogRepository.registrar({
-        usuarioId: Number(req.user!.sub),
-        accion:
-          data.status === "aprobado"
-            ? "DOCUMENTO_APROBADO"
-            : "DOCUMENTO_RECHAZADO",
-        modulo: "DOCUMENTOS_AUDITORIA",
-        entidad: "documentos_auditoria",
-        registroId: String(id),
-        region: doc.idRegion,
-        detalle: `${campos.label} ${data.status}${data.comentario ? ": " + data.comentario : ""}`,
-        req,
-        transaction,
-      });
+      const motivo = data.status === "rechazado" ? ` Motivo del rechazo: ${data.comentario}` : "";
+      auditar(doc,
+        data.status === "aprobado" ? "DOCUMENTO_APROBADO" : "DOCUMENTO_RECHAZADO",
+        `${campos.label}. Estado de ${estadoAnterior} a ${data.status}.${motivo}`);
       return doc.reload({ transaction });
     });
   },
@@ -256,7 +241,7 @@ export const documentoAuditoriaService = {
     const anteriores: string[] = [];
     let doc: DocumentoAuditoriaModel;
     try {
-      doc = await sequelize.transaction(async (transaction) => {
+      doc = await transaccionAuditable(req, async (transaction, auditar) => {
         const actual = await obtenerVisible(id, req, transaction);
         if (actual.idRegion !== (await regionPerfil(req))) {
           throw new AppError("Solo puede cargar documentos en la región de su perfil", 403);
@@ -309,17 +294,15 @@ export const documentoAuditoriaService = {
         if (!actualizados) {
           throw new AppError("La ficha fue modificada; vuelva a cargarla", 409);
         }
-        await auditLogRepository.registrar({
-          usuarioId: Number(req.user!.sub),
-          accion: "DOCUMENTO_CARGADO",
-          modulo: "DOCUMENTOS_AUDITORIA",
-          entidad: "documentos_auditoria",
-          registroId: String(id),
-          region: actual.idRegion,
-          detalle: `Documentos guardados: ${requeridos.map((tipo) => DOCUMENTOS_AUDITORIA[tipo].label).join(", ")}`,
-          req,
-          transaction,
-        });
+        const cargas: string[] = [];
+        const reemplazos: string[] = [];
+        for (const tipo of requeridos) {
+          const campos = DOCUMENTOS_AUDITORIA[tipo];
+          const destinos = actual.getDataValue(campos.url) ? reemplazos : cargas;
+          destinos.push(`${campos.label} (estado de ${actual.getDataValue(campos.estado)} a pendiente)`);
+        }
+        if (cargas.length) auditar(actual, "DOCUMENTO_CARGADO", cargas.join(" · "));
+        if (reemplazos.length) auditar(actual, "DOCUMENTO_REEMPLAZADO", reemplazos.join(" · "));
         return actual.reload({ transaction });
       });
     } catch (error) {
@@ -341,7 +324,7 @@ export const documentoAuditoriaService = {
     let anterior = "";
     let doc: DocumentoAuditoriaModel;
     try {
-      doc = await sequelize.transaction(async (transaction) => {
+      doc = await transaccionAuditable(req, async (transaction, auditar) => {
         const actual = await obtenerVisible(id, req, transaction);
         const campos = DOCUMENTOS_AUDITORIA[tipo];
         const estadoAnterior = actual.getDataValue(campos.estado);
@@ -385,17 +368,9 @@ export const documentoAuditoriaService = {
             "El documento fue modificado; vuelva a cargar la ficha",
             409,
           );
-        await auditLogRepository.registrar({
-          usuarioId: Number(req.user!.sub),
-          accion: anterior ? "DOCUMENTO_REEMPLAZADO" : "DOCUMENTO_CARGADO",
-          modulo: "DOCUMENTOS_AUDITORIA",
-          entidad: "documentos_auditoria",
-          registroId: String(id),
-          region: actual.idRegion,
-          detalle: `${campos.label} ${anterior ? "reemplazado" : "cargado"}`,
-          req,
-          transaction,
-        });
+        auditar(actual,
+          anterior ? "DOCUMENTO_REEMPLAZADO" : "DOCUMENTO_CARGADO",
+          `${campos.label}. Estado de ${estadoAnterior} a pendiente.`);
         return actual.reload({ transaction });
       });
     } catch (error) {

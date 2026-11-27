@@ -1,11 +1,13 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { documentoAuditoriaService as service } from "../services/documentoAuditoria.service";
 import {
   DOCUMENTOS_AUDITORIA,
+  puedeVerTodasRegionesAuditoria,
   TipoDocumentoAuditoria,
 } from "../constants/documentosAuditoria";
 import { AppError } from "../utils/AppError";
 import { rutaPdfAuditoria } from "../utils/archivosAuditoria";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
 
 export const documentoAuditoriaController = {
   async catalogos(req: Request, res: Response) {
@@ -90,18 +92,32 @@ export const documentoAuditoriaController = {
     );
     res.json({ message: "Documento cargado para revisión", data });
   },
-  async archivo(req: Request, res: Response) {
+  async archivo(req: Request, res: Response, next: NextFunction) {
     const id = Number(req.params.id);
     const tipo = req.params.tipo as TipoDocumentoAuditoria;
     const doc = await service.obtenerVisible(id, req);
     const campos = DOCUMENTOS_AUDITORIA[tipo];
     const url = doc.getDataValue(campos.url);
-    if (url.split("/").pop() !== req.params.filename) {
+    if (!url || url.split("/").pop() !== req.params.filename) {
       throw new AppError("Documento no encontrado", 404);
     }
     res.setHeader("Cache-Control", "private, no-store");
     res.type("application/pdf");
-    res.sendFile(rutaPdfAuditoria(id, url));
+    res.sendFile(rutaPdfAuditoria(id, url), (error) => {
+      if (error) {
+        const { code, syscall } = error as NodeJS.ErrnoException;
+        if (code !== "ECONNABORTED" && syscall !== "write") next(error);
+        return;
+      }
+      if (puedeVerTodasRegionesAuditoria(req.user!.roles)) {
+        registrarAuditoriaOpcional({
+          req, usuarioId: Number(req.user!.sub),
+          accion: "DOCUMENTO_REVISADO", modulo: "DOCUMENTOS_AUDITORIA",
+          entidad: "documentos_auditoria", registroId: String(doc.id), region: doc.idRegion,
+          detalle: `${campos.label} abierto para revisión. Estado ${doc.getDataValue(campos.estado)}.`,
+        });
+      }
+    });
   },
   async auditoriaBioBioByRut(req: Request, res: Response) {
     const rut = req.params.rut;
