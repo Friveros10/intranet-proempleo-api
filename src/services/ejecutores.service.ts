@@ -86,7 +86,7 @@ export const ejecutoresService = {
         throw new AppError('Solo se pueden modificar dirección, teléfono y responsable', 400);
       }
       await repository.actualizar(rutParam, data, usuario, transaction);
-      return this.obtener(rutParam, 'proempleo', transaction);
+      return { anterior: actual, actualizado: await this.obtener(rutParam, 'proempleo', transaction) };
     });
   },
 

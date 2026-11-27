@@ -8,5 +8,6 @@ router.get('/decretos/:decreto', asyncHandler(controller.buscarDecreto));
 router.get('/decretos/:decreto/proyectos', asyncHandler(controller.proyectos));
 router.get('/:ordinario/transferencias', asyncHandler(controller.listar));
 router.post('/:ordinario/transferencias', asyncHandler(controller.registrar));
+router.patch('/:ordinario/transferencias/:id', asyncHandler(controller.actualizar));
 
 export default router;

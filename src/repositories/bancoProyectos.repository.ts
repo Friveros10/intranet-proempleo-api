@@ -46,19 +46,29 @@ export const bancoProyectosRepository = {
   },
 
   async actualizar(id: number, datos: DatosBancoProyecto) {
-    const [registro] = await sequelize.query<BancoProyecto>(
+    const [registro] = await sequelize.query<BancoProyecto & {
+      nombre_anterior: string;
+      categoria_anterior: string;
+      alcance_anterior: string;
+    }>(
       `UPDATE ${tabla}
        SET nombre_proyecto = $nombre_proyecto, categoria = $categoria, alcance = $alcance
-       OUTPUT ${salida}
+       OUTPUT ${salida}, DELETED.nombre_proyecto AS nombre_anterior,
+         DELETED.categoria AS categoria_anterior, DELETED.alcance AS alcance_anterior
        WHERE id = $id AND eliminado = 0`,
       { bind: { id, ...datos }, type: QueryTypes.SELECT },
     );
-    return registro;
+    if (!registro) return undefined;
+    const { nombre_anterior, categoria_anterior, alcance_anterior, ...actual } = registro;
+    return {
+      actual,
+      anterior: { nombre_proyecto: nombre_anterior, categoria: categoria_anterior, alcance: alcance_anterior },
+    };
   },
 
   async eliminar(id: number) {
-    const [registro] = await sequelize.query<{ id: number }>(
-      `UPDATE ${tabla} SET eliminado = 1 OUTPUT INSERTED.id
+    const [registro] = await sequelize.query<BancoProyecto>(
+      `UPDATE ${tabla} SET eliminado = 1 OUTPUT ${salida}
        WHERE id = $id AND eliminado = 0`,
       { bind: { id }, type: QueryTypes.SELECT },
     );

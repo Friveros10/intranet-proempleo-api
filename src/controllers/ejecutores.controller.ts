@@ -12,6 +12,10 @@ import {
   responsablesPorComunaSchema,
 } from '../validations/intermediarios.validation';
 import { AppError } from '../utils/AppError';
+import { diferenciasAuditables, valorAuditable } from '../utils/auditoriaCambios';
+import { registrarAuditoriaOpcional } from '../utils/auditoriaOpcional';
+
+const modulo = 'EJECUTORES';
 
 function usuario(req: Request) {
   if (!req.user || !/^\d{1,50}$/.test(req.user.sub)) throw new AppError('Sesión inválida', 401);
@@ -40,7 +44,15 @@ export const ejecutoresController = {
   },
   async crearResponsable(req: Request, res: Response) {
     const { body } = guardarResponsableSchema.parse({ body: req.body });
-    res.status(201).json(await service.crearResponsable(body, usuario(req)));
+    const usuarioId = usuario(req);
+    const responsable = await service.crearResponsable(body, usuarioId);
+    registrarAuditoriaOpcional({
+      req, usuarioId, modulo, entidad: 'RESPONSABLES',
+      accion: 'EJECUTOR_RESPONSABLE_CREADO', registroId: String(responsable.rut_res),
+      region: body.reg_res,
+      detalle: `Responsable ${responsable.rut_res}-${responsable.dig_res} creado en la comuna ${body.com_res}.`,
+    });
+    res.status(201).json(responsable);
   },
   async obtener(req: Request, res: Response) {
     const { params, query } = obtenerEjecutorSchema.parse({ params: req.params, query: req.query });
@@ -48,10 +60,27 @@ export const ejecutoresController = {
   },
   async crear(req: Request, res: Response) {
     const { body } = guardarEjecutorSchema.parse({ body: req.body });
-    res.status(201).json(await service.crear(body, usuario(req)));
+    const usuarioId = usuario(req);
+    const ejecutor = await service.crear(body, usuarioId);
+    registrarAuditoriaOpcional({
+      req, usuarioId, modulo, entidad: 'EJECUTORES',
+      accion: 'EJECUTOR_CREADO', registroId: String(ejecutor.rut_eje), region: ejecutor.reg_eje,
+      detalle: `Ejecutor ${valorAuditable(ejecutor.nom_eje)} creado en la comuna ${ejecutor.com_eje}.`,
+    });
+    res.status(201).json(ejecutor);
   },
   async actualizar(req: Request, res: Response) {
     const { body } = guardarEjecutorSchema.parse({ body: req.body });
-    res.json(await service.actualizar(Number(req.params.rut), body, usuario(req)));
+    const usuarioId = usuario(req);
+    const { anterior, actualizado } = await service.actualizar(Number(req.params.rut), body, usuarioId);
+    const cambios = diferenciasAuditables(anterior, actualizado, [
+      ['dir_eje', 'Dirección'], ['tel_eje', 'Teléfono'], ['rut_res', 'RUT del responsable'],
+    ]);
+    registrarAuditoriaOpcional({
+      req, usuarioId, modulo, entidad: 'EJECUTORES',
+      accion: 'EJECUTOR_ACTUALIZADO', registroId: String(actualizado.rut_eje), region: actualizado.reg_eje,
+      detalle: cambios.join(' · ') || 'Guardado sin cambios.',
+    });
+    res.json(actualizado);
   },
 };

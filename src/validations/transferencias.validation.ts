@@ -34,3 +34,9 @@ export const registrarTransferenciaSchema = z.object({
 export type FiltrosTransferencias = z.infer<typeof filtrosTabla>;
 export type ListarTransferenciasQuery = z.infer<typeof listarTransferenciasSchema>['query'];
 export type RegistrarTransferenciaInput = z.infer<typeof registrarTransferenciaSchema>['body'];
+
+export const editarTransferenciaSchema = z.object({
+  params: paramsOrdinario.extend({ id: z.coerce.number().int().positive().max(2147483647) }),
+  body: registrarTransferenciaSchema.shape.body.pick({ monto: true, observaciones: true }),
+});
+export type EditarTransferenciaInput = z.infer<typeof editarTransferenciaSchema>['body'];

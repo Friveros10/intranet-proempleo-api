@@ -4,6 +4,7 @@ import { TransferenciasModel } from "../models/Transferencias.model";
 import { TransferenciasProempleoModel } from "../models/TransferenciasProempleo.model";
 import type {
   FiltrosTransferencias,
+  EditarTransferenciaInput,
   ListarTransferenciasQuery,
   RegistrarTransferenciaInput,
 } from "../validations/transferencias.validation";
@@ -11,10 +12,10 @@ import { ordinariosUnificados } from "./ordinarios.repository";
 
 const tablaNueva = `dbo.${TransferenciasProempleoModel.tableName}`;
 const columnas =
-  "ordinario, folio, correlativo, monto, estado, fol_dec, fec_trans";
+  "ordinario, folio, correlativo, monto, estado, fol_dec, fec_trans, observaciones";
 const transferencias = `
-  SELECT ${columnas}, 'legacy' origen FROM dbo.${TransferenciasModel.tableName}
-  UNION ALL SELECT ${columnas}, 'proempleo' FROM ${tablaNueva}
+  SELECT ${columnas}, CAST(NULL AS INT) id, 'legacy' origen FROM dbo.${TransferenciasModel.tableName}
+  UNION ALL SELECT ${columnas}, id, 'proempleo' FROM ${tablaNueva}
 `;
 const asociaciones = `
   SELECT fol_dec, fol_pro, est_decpro FROM dbo.DECPRO
@@ -47,6 +48,9 @@ type TransferenciaListado = Omit<Proyecto, "decretado" | "saldo"> & {
   origen: string;
   correlativo: number;
   fecha: string | null;
+  id: number | null;
+  estado: string | null;
+  observaciones: string | null;
 };
 const baseProyectos = `
     WITH asociaciones AS (${asociaciones}), asociados AS (
@@ -93,10 +97,10 @@ const baseTransferencias = `
     ), datos AS (
       SELECT t.folio, RTRIM(p.nom_pro) nombre, RTRIM(c.nom_com) comuna, p.emp_pro beneficiarios,
         YEAR(t.fechaEfectiva) anio, MONTH(t.fechaEfectiva) mes, CONVERT(CHAR(10), t.fechaEfectiva, 23) fecha,
-        t.origen, t.correlativo, RTRIM(t.fol_dec) decreto,
-        CONVERT(VARCHAR(40), p.montoProyecto) decretado, CONVERT(VARCHAR(40), ISNULL(s.transferido, 0)) transferido,
+        t.id, t.origen, t.correlativo, RTRIM(t.fol_dec) decreto, RTRIM(t.estado) estado, RTRIM(t.observaciones) observaciones,
+        CONVERT(VARCHAR(40), p.montoProyecto) decretado, CONVERT(VARCHAR(40), importes.otrasTransferencias) transferido,
         CONVERT(VARCHAR(40), t.monto) monto,
-        CONVERT(VARCHAR(40), p.montoProyecto - ISNULL(s.transferido, 0)) saldo
+        CONVERT(VARCHAR(40), p.montoProyecto - importes.otrasTransferencias) saldo
       FROM propias t
       OUTER APPLY (
         SELECT TOP (1) nom_pro, com_pro, emp_pro,
@@ -107,6 +111,7 @@ const baseTransferencias = `
       ) p
       LEFT JOIN dbo.COMUNAS c ON c.cod_com = p.com_pro
       LEFT JOIN totales s ON s.folio = t.folio
+      CROSS APPLY (SELECT ISNULL(s.transferido, 0) - ISNULL(CAST(t.monto AS DECIMAL(38,0)), 0) otrasTransferencias) importes
     )`;
 
 async function paginar<T extends object>(
@@ -230,6 +235,21 @@ export const transferenciasRepository = {
     );
   },
 
+  async obtenerRealizada(ordinario: string, id: number, transaction?: Transaction) {
+    const [fila] = await sequelize.query<TransferenciaListado>(`
+      ${baseTransferencias} SELECT * FROM datos WHERE id = :id
+    `, { type: QueryTypes.SELECT, replacements: { ordinario, id, decreto: null }, transaction });
+    return fila ?? null;
+  },
+
+  async actualizar(ordinario: string, id: number, data: EditarTransferenciaInput, usuario: string, transaction: Transaction) {
+    await sequelize.query(`
+      UPDATE ${tablaNueva} SET monto = :monto, observaciones = :observaciones,
+        ultimo_usuario = :usuario, ultima_actualizacion = GETDATE()
+      WHERE ordinario = :ordinario AND id = :id AND ISNULL(estado, '') <> 'ELIMINADO'
+    `, { replacements: { ...data, ordinario, id, usuario, observaciones: data.observaciones || null }, transaction });
+  },
+
   async obtenerProyecto(
     decreto: string,
     folio: number,
@@ -271,16 +291,18 @@ export const transferenciasRepository = {
     usuario: string,
     transaction: Transaction,
   ) {
-    await sequelize.query(
+    const [creada] = await sequelize.query<{ id: number; correlativo: number }>(
       `
       WITH transferencias AS (${transferencias})
       INSERT INTO ${tablaNueva}
         (ordinario, folio, correlativo, monto, estado, ingreso, ultimo_usuario, ultima_actualizacion, fec_trans, fol_dec, observaciones)
+      OUTPUT INSERTED.id AS id, INSERTED.correlativo AS correlativo
       SELECT :ordinario, :folio, ISNULL(MAX(CONVERT(INT, correlativo)), 0) + 1, :monto,
         'VIGENTE', GETDATE(), :usuario, GETDATE(), CONVERT(DATE, :fechaPago, 23), :decreto, :observaciones
       FROM transferencias WHERE ordinario = :ordinario AND folio = :folio
     `,
-      { replacements: { ...data, ordinario, usuario, fechaPago, observaciones: data.observaciones || null }, transaction },
+      { type: QueryTypes.SELECT, replacements: { ...data, ordinario, usuario, fechaPago, observaciones: data.observaciones || null }, transaction },
     );
+    return creada;
   },
 };
