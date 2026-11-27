@@ -4,11 +4,21 @@ import { glosasDecretoSchema, guardarDecretoSchema, listarDecretosSchema, obtene
 import { AppError } from '../utils/AppError';
 import { desvincularProyectoDecretoSchema } from '../validations/decretos.validation';
 import { proyectosDecretoSchema, asociarProyectoDecretoSchema, buscarProyectoDecretoSchema } from '../validations/decretos.validation';
+import { registrarAuditoriaOpcional } from '../utils/auditoriaOpcional';
+
+const auditoriaAsignaciones = { modulo: 'DECRETOS_Y_RESOLUCIONES', entidad: 'DECPRO_PROEMPLEO' };
 
 export const decretosController = {
   async desvincularProyecto(req: Request, res: Response) {
     const { params, query } = desvincularProyectoDecretoSchema.parse({ params: req.params, query: req.query });
-    res.json(await service.desvincularProyecto(params.folio, query.origen, params.proyecto, query.origenProyecto, usuario(req)));
+    const usuarioId = usuario(req);
+    const { asociacion, region } = await service.desvincularProyecto(params.folio, query.origen, params.proyecto, query.origenProyecto, usuarioId);
+    registrarAuditoriaOpcional({
+      ...auditoriaAsignaciones, req, usuarioId, region,
+      accion: 'DECRETO_PROYECTO_DESVINCULADO', registroId: `${asociacion.fol_dec}:${asociacion.fol_pro}`,
+      detalle: `Proyecto ${asociacion.fol_pro} desvinculado del decreto ${asociacion.fol_dec}. Asociación marcada como ELIMINADO.`,
+    });
+    res.json(asociacion);
   },
   async buscarProyecto(req: Request, res: Response) {
     const { params, query } = buscarProyectoDecretoSchema.parse({ params: req.params, query: req.query });
@@ -25,7 +35,14 @@ export const decretosController = {
   async asociarProyecto(req: Request, res: Response) {
     const { params, query } = proyectosDecretoSchema.parse({ params: req.params, query: req.query });
     const { body } = asociarProyectoDecretoSchema.parse({ body: req.body });
-    res.status(201).json(await service.asociarProyecto(params.folio, query.origen, body, usuario(req)));
+    const usuarioId = usuario(req);
+    const { asociacion, region } = await service.asociarProyecto(params.folio, query.origen, body, usuarioId);
+    registrarAuditoriaOpcional({
+      ...auditoriaAsignaciones, req, usuarioId, region,
+      accion: 'DECRETO_PROYECTO_ASOCIADO', registroId: `${asociacion.fol_dec}:${asociacion.fol_pro}`,
+      detalle: `Proyecto ${asociacion.fol_pro} asociado al decreto ${asociacion.fol_dec}. Monto asignado ${body.mon_decpro} CLP.`,
+    });
+    res.status(201).json(asociacion);
   },
   async intermediarios(req: Request, res: Response) {
     if (!req.user) throw new AppError('No autenticado', 401);

@@ -2,6 +2,8 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'DECRETO_PROYECTO_ASOCIADO'
+  | 'DECRETO_PROYECTO_DESVINCULADO'
   | 'USUARIO_CREADO'
   | 'USUARIO_DESACTIVADO'
   | 'USUARIO_PERFIL_ACTUALIZADO'

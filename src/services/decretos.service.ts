@@ -15,7 +15,7 @@ export const decretosService = {
       if (!proyecto) throw new AppError('Proyecto no encontrado', 404);
       if (Number(proyecto.reg_pro) !== Number(region)) throw new AppError('El proyecto debe pertenecer a la región del intermediario del decreto', 400);
       if (!await repository.desvincularProyecto(folio, proyectoFolio, usuario, transaction)) throw new AppError('No hay una asociación modificable entre este proyecto y el decreto', 404);
-      return { fol_dec: folio, fol_pro: proyectoFolio };
+      return { region, asociacion: { fol_dec: folio, fol_pro: proyectoFolio } };
     });
   },
   async contextoAsignacion(folio: string, origen: OrigenMarco) {
@@ -53,7 +53,7 @@ export const decretosService = {
       if (Number(proyecto.reg_pro) !== Number(region)) throw new AppError('El proyecto debe pertenecer a la región del intermediario del decreto', 400);
       if ((await proyectosRepository.decretos(data.fol_pro, transaction)).some((d) => d.fol_dec === folio)) throw new AppError('El proyecto ya está asociado al decreto', 409);
       await proyectosRepository.asignarDecreto(data.fol_pro, folio, data.mon_decpro, usuario, transaction, decreto.folprov_dec ?? '');
-      return { fol_dec: folio, fol_pro: data.fol_pro };
+      return { region, asociacion: { fol_dec: folio, fol_pro: data.fol_pro } };
     });
   },
   async intermediarios(rut: number) {
