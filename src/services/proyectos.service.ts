@@ -480,7 +480,7 @@ export const proyectosService = {
         usuario,
         transaction,
       );
-      return { fol_pro: folio, rut_ben: rut.cuerpo, ...data, ...horario };
+      return { region: proyecto.reg_pro, resultado: { fol_pro: folio, rut_ben: rut.cuerpo, ...data, ...horario } };
     });
   },
 
@@ -574,7 +574,7 @@ export const proyectosService = {
             transaction,
           );
         }
-        return { total: filas.length };
+        return { region: proyecto.reg_pro, periodoAnterior: anterior, resultado: { total: filas.length } };
       },
     );
   },
@@ -603,19 +603,13 @@ export const proyectosService = {
         ...(data.horario_benproJson &&
           prepararHorario(data.horario_benproJson)),
       };
-      if (
-        !(await repository.actualizarHorarioBeneficiario(
-          folio,
-          rut,
-          periodo,
-          datos,
-          usuario,
-          transaction,
-        ))
-      ) {
+      const cambios = await repository.actualizarHorarioBeneficiario(
+        folio, rut, periodo, datos, usuario, transaction,
+      );
+      if (!cambios.length) {
         throw new AppError("La asignación ProEmpleo no fue encontrada", 404);
       }
-      return datos;
+      return { region: proyecto.reg_pro, cambios, resultado: datos };
     });
   },
 
@@ -647,7 +641,7 @@ export const proyectosService = {
       );
       if (!eliminado)
         throw new AppError("La asignación ProEmpleo no fue encontrada", 404);
-      return { fol_pro: folio, rut_ben: rut, ...periodo };
+      return { region: proyecto.reg_pro, resultado: { fol_pro: folio, rut_ben: rut, ...periodo } };
     });
   },
 
@@ -742,7 +736,7 @@ export const proyectosService = {
         },
         transaction,
       );
-      return this.obtener(folioParam, "proempleo", transaction);
+      return { anterior: actual, actualizado: await this.obtener(folioParam, "proempleo", transaction) };
     });
   },
 
@@ -753,7 +747,7 @@ export const proyectosService = {
         throw new AppError("Proyecto no encontrado para eliminar", 404);
       }
       await repository.eliminar(folio, usuario, transaction);
-      return { fol_pro: folio };
+      return { anterior: actual, resultado: { fol_pro: folio } };
     });
   },
 };

@@ -742,13 +742,20 @@ export const proyectosRepository = {
     usuario: string,
     transaction: Transaction,
   ) {
-    const rows = await sequelize.query<{ id: number }>(
+    return sequelize.query<{
+      id: number;
+      direccionAnterior: string | null;
+      direccion: string | null;
+      horarioAnterior: string | null;
+      horario: string | null;
+    }>(
       `
       UPDATE dbo.benpro_proempleo SET dir_benpro = COALESCE(:direccion, dir_benpro),
         horario_benpro = COALESCE(:horario, horario_benpro),
         horario_benproJson = COALESCE(:horarioJson, horario_benproJson),
         usu_mod = :usuario, fec_mod = GETDATE()
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id, DELETED.dir_benpro AS direccionAnterior, INSERTED.dir_benpro AS direccion,
+        DELETED.horario_benpro AS horarioAnterior, INSERTED.horario_benpro AS horario
       WHERE fol_pro = :folio AND rut_ben = :rut AND ano_BenPro = :anio AND mes_benpro = :mes
         AND (est_benpro IS NULL OR RTRIM(est_benpro) <> 'ELIMINADO')`,
       {
@@ -767,7 +774,6 @@ export const proyectosRepository = {
         transaction,
       },
     );
-    return rows.length > 0;
   },
 
   async eliminarBeneficiario(
