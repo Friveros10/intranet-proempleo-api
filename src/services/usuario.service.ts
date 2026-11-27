@@ -72,10 +72,11 @@ export const usuarioService = {
   },
 
   async desactivar(rutUsuario: number) {
-    if (await usuarioSicapRepository.desactivar(rutUsuario)) return;
+    if (await usuarioSicapRepository.desactivar(rutUsuario)) return true;
     const usuario = await usuarioSicapRepository.findByRut(rutUsuario);
     if (!usuario) throw new AppError("Usuario no encontrado", 404);
     if (usuario.est_usu !== "INACTIVO") throw new AppError("Solo se puede desactivar un usuario activo", 409);
+    return false;
   },
 
   async resetearClave(rutUsuario: number) {
@@ -155,14 +156,21 @@ export const usuarioService = {
       throw new AppError("Usuario no encontrado", 404);
     }
 
-    await usuarioSicapRepository.actualizarDatosPersonales(rutUsuario, {
+    if (data.ema_usu && usuario.ema_usu?.trim()) {
+      throw new AppError("El perfil ya tiene un correo electrónico registrado", 409);
+    }
+
+    const guardado = await usuarioSicapRepository.actualizarDatosPersonales(rutUsuario, {
       dir_usu: data.dir_usu ?? null,
       ciu_usu: data.ciu_usu ?? null,
       com_usu: data.com_usu ?? null,
-    });
+    }, data.ema_usu ? { nuevo: data.ema_usu, anterior: usuario.ema_usu } : undefined);
+    if (!guardado) {
+      throw new AppError("El perfil cambió. Vuelve a cargarlo antes de guardar.", 409);
+    }
 
     const actualizado = await usuarioSicapRepository.findByRut(rutUsuario);
-    return actualizado ? usuarioSeguro(actualizado) : null;
+    return { anterior: usuarioSeguro(usuario), actualizado: actualizado ? usuarioSeguro(actualizado) : null };
   },
 
   async cambiarClave(rutUsuario: number, data: CambiarClaveInput) {

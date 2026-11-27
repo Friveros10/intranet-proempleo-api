@@ -27,7 +27,7 @@ export const actualizarDatosPersonalesSchema = z.object({
     dir_usu: z.string().trim().min(1).max(50).nullable().optional(),
     ciu_usu: z.coerce.number().int().nullable().optional(),
     com_usu: z.coerce.number().int().nullable().optional(),
-    ema_usu: z.never({ invalid_type_error: 'El correo electrónico no se puede modificar desde configuración' }).optional(),
+    ema_usu: z.string().trim().email('Ingresa un correo electrónico válido').max(50).optional(),
   }),
 });
 

@@ -20,6 +20,14 @@ import { AppError } from "../utils/AppError";
 import { parseRut } from "../utils/rut";
 import { logger } from "../utils/logger";
 import type { AuditAccion } from "../models/AuditLog.model";
+import { diferenciasAuditables } from "../utils/auditoriaCambios";
+import { registrarAuditoriaOpcional } from "../utils/auditoriaOpcional";
+
+const auditoriaConfiguracion = {
+  modulo: "CONFIGURACION",
+  entidad: "flujo_reemplazo_proempleo",
+  accion: "FLUJO_REEMPLAZO_CONFIGURADO",
+} as const;
 
 async function contexto(rut: number) {
   const [usuario, permisos] = await Promise.all([
@@ -52,7 +60,7 @@ async function obtener(id: number, rut: number): Promise<Solicitud> {
 async function auditar(req: Request, rut: number, accion: AuditAccion, id: number, region: number | null, detalle: string, transaction?: Transaction) {
   await auditLogRepository.registrar({
     usuarioId: rut, accion, modulo: "REEMPLAZOS_INDIVIDUALES",
-    entidad: accion === "FLUJO_REEMPLAZO_CONFIGURADO" ? "flujo_reemplazo_proempleo" : "reemplazo_individual_proempleo",
+    entidad: "reemplazo_individual_proempleo",
     registroId: String(id), region, detalle, req, transaction,
   });
 }
@@ -78,11 +86,17 @@ export const flujoReemplazoService = {
     if (!regiones.some((region) => region.cod_region === idRegion)) {
       throw new AppError("La región no está activa", 400);
     }
-    return sequelize.transaction(async (transaction) => {
-      const resultado = await repository.configurar(idRegion, status, transaction);
-      await auditar(req, rut, "FLUJO_REEMPLAZO_CONFIGURADO", idRegion, idRegion, `Configuración regional: ${status}`, transaction);
-      return resultado;
+    const { anterior, resultado } = await sequelize.transaction((transaction) =>
+      repository.configurar(idRegion, status, transaction),
+    );
+    const nombreFlujo = (valor: number) => valor === 1 ? "solicitud individual" : "solicitud de tres candidatos";
+    registrarAuditoriaOpcional({
+      ...auditoriaConfiguracion, req, usuarioId: rut, registroId: String(idRegion), region: idRegion,
+      detalle: anterior === resultado.status
+        ? `Flujo regional guardado sin cambios (${nombreFlujo(resultado.status)}).`
+        : `Flujo regional de ${nombreFlujo(anterior)} a ${nombreFlujo(resultado.status)}.`,
     });
+    return resultado;
   },
   async configurarPeriodo(idRegion: number, fechaDesde: number, fechaHasta: number, rut: number, req: Request) {
     const regiones = await regionRepository.findRegionesActivas();
@@ -92,11 +106,17 @@ export const flujoReemplazoService = {
     if (fechaDesde > fechaHasta) {
       throw new AppError("El día de inicio no puede ser mayor que el día de término", 400);
     }
-    return sequelize.transaction(async (transaction) => {
-      const resultado = await repository.configurarPeriodo(idRegion, fechaDesde, fechaHasta, transaction);
-      await auditar(req, rut, "FLUJO_REEMPLAZO_CONFIGURADO", idRegion, idRegion, `Período regional: ${fechaDesde} al ${fechaHasta}`, transaction);
-      return resultado;
+    const { anterior, resultado } = await sequelize.transaction((transaction) =>
+      repository.configurarPeriodo(idRegion, fechaDesde, fechaHasta, transaction),
+    );
+    const cambios = diferenciasAuditables(anterior, resultado, [
+      ["fechaDesde", "Día de inicio"], ["fechaHasta", "Día de término"],
+    ]);
+    registrarAuditoriaOpcional({
+      ...auditoriaConfiguracion, req, usuarioId: rut, registroId: String(idRegion), region: idRegion,
+      detalle: cambios.join(" · ") || "Período regional guardado sin cambios.",
     });
+    return resultado;
   },
   async actual(rut: number) {
     const usuario = await contexto(rut);

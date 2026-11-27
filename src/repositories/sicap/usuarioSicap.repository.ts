@@ -82,11 +82,13 @@ export const usuarioSicapRepository = {
   async actualizarDatosPersonales(
     rut_usu: number,
     data: { dir_usu: string | null; ciu_usu: number | null; com_usu: number | null },
-  ): Promise<void> {
-    await UsuarioSicapModel.update(
-      { dir_usu: data.dir_usu, ciu_usu: data.ciu_usu, com_usu: data.com_usu, fec_mod: sequelize.fn('GETDATE') as unknown as Date },
-      { where: { rut_usu } },
+    correo?: { nuevo: string; anterior: string | null },
+  ): Promise<boolean> {
+    const [total] = await UsuarioSicapModel.update(
+      { ...data, ...(correo && { ema_usu: correo.nuevo }), fec_mod: sequelize.fn('GETDATE') as unknown as Date },
+      { where: { rut_usu, ...(correo && { ema_usu: correo.anterior }) } },
     );
+    return total > 0;
   },
 
   async cambiarClave(rut_usu: number, cla_usu: string, claveAnterior?: string): Promise<boolean> {

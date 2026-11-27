@@ -2,6 +2,11 @@ import { DataTypes, Model, Optional } from 'sequelize';
 import { sequelize } from '../database/sequelize';
 
 export type AuditAccion =
+  | 'USUARIO_CREADO'
+  | 'USUARIO_DESACTIVADO'
+  | 'USUARIO_PERFIL_ACTUALIZADO'
+  | 'USUARIO_CLAVE_CAMBIADA'
+  | 'USUARIO_CLAVE_RESTABLECIDA'
   | 'CONDOC_CREADO'
   | 'CONDOC_ESTADO_ACTUALIZADO'
   | 'INTERMEDIARIO_CREADO'

@@ -1,4 +1,4 @@
-import { CreationAttributes, Op, Transaction, WhereOptions } from "sequelize";
+import { CreationAttributes, Op, TableHints, Transaction, WhereOptions } from "sequelize";
 import dayjs from "dayjs";
 import { FlujoReemplazoModel, ReemplazoIndividualModel, DocumentoIndividualModel } from "../models/FlujoReemplazo.model";
 import type { ReemplazoBenProyecto } from "../models/ReemplazoBenProyecto.model";
@@ -43,25 +43,29 @@ export const flujoReemplazoRepository = {
   // Si la región no tiene registro, se crea con los valores por defecto
   // (status 0, período 20-28) para que siempre exista configuración.
   async configuracion(idRegion: number, transaction?: Transaction) {
-    const [config] = await FlujoReemplazoModel.findOrCreate({
+    const opciones = {
       where: { idRegion },
       defaults: { idRegion, status: 0, fechaDesde: 20, fechaHasta: 28 },
       transaction,
-    });
+      tableHint: transaction ? TableHints.UPDLOCK : undefined,
+    };
+    const [config] = await FlujoReemplazoModel.findOrCreate(opciones);
     return config;
   },
   async configurar(idRegion: number, status: number, transaction?: Transaction) {
     const config = await this.configuracion(idRegion, transaction);
+    const anterior = config.status;
     config.status = status;
     await config.save({ transaction });
-    return { idRegion, status };
+    return { anterior, resultado: { idRegion, status } };
   },
   async configurarPeriodo(idRegion: number, fechaDesde: number, fechaHasta: number, transaction?: Transaction) {
     const config = await this.configuracion(idRegion, transaction);
+    const anterior = { fechaDesde: config.fechaDesde, fechaHasta: config.fechaHasta };
     config.fechaDesde = fechaDesde;
     config.fechaHasta = fechaHasta;
     await config.save({ transaction });
-    return { idRegion, fechaDesde, fechaHasta };
+    return { anterior, resultado: { idRegion, fechaDesde, fechaHasta } };
   },
   async listar(filtros: ReemplazoFiltros) {
     const where: WhereOptions<ReemplazoBenProyecto> = {};
